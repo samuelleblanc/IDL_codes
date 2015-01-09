@@ -18,6 +18,7 @@ The different folders denote the different research projects, which may or may n
   - libradtran for reading the output of libradtran radiative transfer package
   - mixed_phase for preparing cloud mixed phase retrievals using spectral zenith radiance measurements
   - platform for analyzing the file output of the active stabilisation platform of the SSFR instrument
+  - podex for preliminary field data analysis and real time view of SSFR data gathered from NASA er2 and levelling platform during PODEX Jan-Feb 2013
   - rtm_aero for preliminary analysis on aerosol information from radiance and irradiance ground based measurements
   - seac4rs for data quality and preliminary analysis of SEAC4RS field mission data of SSFR from 2013 based in Houston, Texas for the NASA DC8 and NASA ER2 platforms
   - sks for initial analysis of next generation SSFR instrument
