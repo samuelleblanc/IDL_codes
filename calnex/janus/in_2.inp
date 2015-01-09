@@ -1,0 +1,3 @@
+.r calnex_aerosol_retrieval
+.r calnex_aerosol_retrieval
+calnex_aerosol_retrieval,'20100519',use_wvl=2,/cluster,/abs_min,/aeronet

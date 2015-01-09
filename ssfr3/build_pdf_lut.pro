@@ -1,0 +1,55 @@
+; program to get the standard deviation of the pars_lut
+
+pro build_pdf_lut,ll
+dir='C:\Users\Samuel\Research\SSFR3\'
+
+if ll ne 'all' and ll ne 'day' then $
+restore, dir+'data\sp_par_'+ll+'_v1_20120525.out'
+
+case ll of
+'ab':par=pars[*,*,*,*,0]
+'pw':begin
+      restore, dir+'data\par_ab_v1_20120525.out'
+      par=pars[*,*,*,*,0]
+      restore, dir+'data\sp_par_'+ll+'_v1_20120525.out'
+     end
+'z':par=pars[*,*,*,*,0]
+'all':begin
+      restore, dir+'data\par_ab_v1_20120525.out'
+      par=pars[*,*,*,*,0]
+      pars_ab=pars
+      restore, dir+'data\par_pw_v1_20120525.out'
+      pars_pw=pars
+      restore, dir+'data\par_z_v1_20120525.out'
+      pars_z=pars
+     end
+'day':begin
+      restore, dir+'data\par_ab_v1_20120525.out'
+      par=pars[*,*,*,*,0]
+      pars_ab=pars
+      restore, dir+'data\par_pw_v1_20120525.out'
+      pars_pw=pars
+      restore, dir+'data\par_z_v1_20120525.out'
+      pars_z=pars
+     end
+endcase
+
+
+std=fltarr(n_elements(taus),n_elements(refs),2,n_elements(pars[0,0,0,*,0]))
+for t=0, n_elements(taus)-1 do $ ;begin
+ for r=0, n_elements(refs)-1 do  $ ;begin
+ for w=0, 1 do $ ;begin
+ for p=0, n_elements(pars[0,0,0,*,0])-1 do $ ;begin       
+ if ll eq 'all' then std[t,r,w,p]=stddev([reform(pars_ab[t,r,w,p,*]),reform(pars_pw[t,r,w,p,*]),reform(pars_z[t,r,w,p,*])]) else $
+ if ll eq 'day' then std[t,r,w,p]=stddev([reform(pars_ab[t,r,w,p,1:3]),$
+                                          reform(pars_pw[t,r,w,p,1:2]),reform(pars_z[t,r,w,p,1:2])]) else $
+        std[t,r,w,p]=stddev(pars[t,r,w,p,*])
+ ;     endfor
+ ;   endfor
+ ; endfor
+;endfor
+
+pars=par
+save, taus, refs, wp, pars, std, filename=dir+'data\par_std_'+ll+'_v1.out'
+
+end

@@ -1,0 +1,3 @@
+.r arctas_rtm_aero
+.r arctas_rtm_aero
+arctas_rtm_aero,'20080408',use_wl=10,/hist,/no_tau_loop

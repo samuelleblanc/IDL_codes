@@ -1,0 +1,128 @@
+;+
+; NAME:
+;   aero_radtran
+;
+; PURPOSE:
+;   to do a single run of the libradtran model with the specified input parameters
+;   uses only a sample input files
+;   mostly for testing.
+;
+; CATEGORY:
+;   Aerosol optical properties, model testing
+;
+; CALLING SEQUENCE:
+;   output=aero_radtran(date, sza, aot, ssa, asy, wvl, albedo, zout)
+;   date   - date of the day in format yyyymmdd
+;   sza    - solar zenith angle
+;   aot    - aerosol optical depth
+;   ssa    - single scattering albedo
+;   asy    - asymmetry parameter
+;   wvl    - wavelength (nm)
+;   albedo - surface albedo at that wavelength
+;   zout   - at which altitude the desired values are reported (km)
+;   
+;   
+; OUTPUT:
+;   output structure, same as libradtran_reader
+;    - dif_dn : diffuse downwelling irradiance (W/m^2 nm)
+;    - dir_dn : direct downwelling irradiance (W/m^2 nm)
+;    - dif_up : diffuse upwelling irradiance (W/m^2 nm)
+;    - rad    : zenith pointing radiance (W/m^2 nm sr)
+;    - wvl    : wavelenght used for calculations (nm)
+;    - zout   : altitude(s) used for calculations (km)
+;
+; KEYWORDS:
+;   none
+;
+; DEPENDENCIES:
+;   zensun.pro
+;   libradtran_reader.pro
+;   
+; NEEDED FILES:
+;   - all input files for libradtran
+;  
+; EXAMPLE:
+;   output=aero_radtran(date, sza, aot, ssa, asy, wvl, albedo, zout)
+;
+; MODIFICATION HISTORY:
+; Written:  Samuel LeBlanc, September 13th, 2012, University of Colorado, LASP, Boulder, CO
+; Modified: 
+;
+;---------------------------------------------------------------------------
+
+
+@zensun.pro
+@/home/leblanc/libradtran/pro/libradtran_reader.pro
+function aero_radtran, date, sza, aot, ssa, asy, wvl, albedo, zout
+
+doy=julian_day(fix(strmid(date,0,4)),fix(strmid(date,4,2)),fix(strmid(date,6,2)))
+
+indir  = '/home/leblanc/libradtran/input/'
+outdir = '/home/leblanc/libradtran/output/'
+atm_file='/home/leblanc/libradtran/libRadtran-1.5-beta/data/atmmod/afglms.dat'
+fi='aero_radtran'
+    input_file=indir+fi+'.in'  
+    output_file=outdir+fi+'.out'
+wvl=[wvl,wvl]
+write_input_file, doy, sza, tau_file, atm_file, input_file, 0., asy, ssa, wvl, zout, albedo, $
+     /radiance, tau_scale=1.,/slit,/quiet,/nofile, aod=aot
+     spawn, '/home/leblanc/libradtran/libRadtran-1.6-beta/bin/uvspec < '+input_file+' > '+output_file
+     output=libradtran_reader(file = output_file,/radiance,zout = zout,/quiet)
+
+return, output
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Write input file program                                                    ;;
+;; used to make the input file for uvspec                                      ;;
+;; use radiance keyword to set radiance (zenith pointing)                      ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+pro write_input_file, doy, sza, tau_file, atm_file, input_file, azimuth, asy, ssa, wvl, zout, albedo, radiance=radiance,$
+  quiet=quiet, tau_scale=tau_scale, slit=slit, nofile=nofile, aod=aod
+
+ui=99
+openw,ui,input_file;,/get_lun
+printf,ui,'data_files_path   /home/leblanc/libradtran/libRadtran-1.5-beta/data'
+printf,ui,'solar_file        /home/leblanc/libradtran/libRadtran-1.5-beta/data/solar_flux/kurudz_1.0nm.dat'
+printf,ui,'atmosphere_file   '+atm_file
+
+;printf,ui,'albedo_library    IGBP    # Spectral albedo library '
+;printf,ui,'surface_type      13      # urban albedo from library'
+if albedo lt 0 then albedo=albedo*(-1.)
+printf,ui,'albedo            '+string(albedo)  ; 
+
+printf,ui,'rte_solver        disort2'
+printf,ui,'nstr              6'
+printf,ui,'correlated_k      SBDART'        ; pseudo-spectral definition of atmospheric absorption
+
+printf,ui,'sza               '+string(sza)    ; solar zenith angle (deg)
+printf,ui,'day_of_year       '+string(doy)    ; day of year for Sun-Earth distance
+
+if keyword_set(radiance) then begin
+  printf,ui,'phi0              '+string(azimuth+180.0); solar azimuth angle (deg)
+  printf,ui,'umu               -1  # -1:downward radiance; 1:upward radiance; 0:sidward radiance' ;for radiances (ship)
+  printf,ui,'phi               270.0   # output azimuth angle (flight-direction: NNW = 350°)' ;for radiances(ship direction)
+endif
+
+printf,ui,'aerosol_default'                   ; initialize aerosol
+if not keyword_set(nofile) then printf,ui,'aerosol_tau_file  '+tau_file else printf, ui, 'aerosol_set_tau  '+string(aod)
+printf,ui,'aerosol_set_ssa   '+string(ssa)
+printf,ui,'aerosol_set_gg    '+string(asy)
+if keyword_set(tau_scale) then printf, ui, 'aerosol_scale_tau   '+string(tau_scale)
+
+printf,ui,'wavelength        '+string(wvl[0],format='(I4)')+'  '+string(wvl[1],format='(I4)') ; wavelengths
+printf,ui,'altitude          0.0' ;0.263 # elevation (ASL) of CalTech in km'      
+printf,ui,'zout              '+string(zout, format='('+strtrim(string(n_elements(zout)),2)+'(" ",F8.2))')
+
+if keyword_set(slit) then begin ; if set, use slit function, must change for IngAas
+  if wvl[0] le 940 then printf,ui,'slit_function_file /home/leblanc/libradtran/vis_1nm.dat' else printf,ui,'slit_function_file /home/leblanc/libradtran/nir_1nm.dat'
+endif
+
+printf,ui,'quiet'
+free_lun,ui
+
+if not keyword_set(quiet) then print, 'input file saved to: '+input_file
+
+end
+

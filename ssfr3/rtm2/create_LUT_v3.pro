@@ -1,0 +1,155 @@
+; program to read in the lut up table with various wavelengths then ouput a lut with values at 515 and slopes at 1630
+; based on Shi's and Patrick's work
+
+@zensun.pro
+pro create_LUT
+twowvl=1
+twelve=0
+snow=1
+win=1
+
+
+if twelve then iw=5 else iw=12 ; index for wavelength
+
+dir='/home/leblanc/DC3_SEAC4RS/library/'
+if not win then dir='/argus/roof/SSFR3/model/' else $
+  dir='C:\Users\Samuel\Research\SSFR3\data\'
+
+;restore, dir+'CLD_LIQ_LUT_BOULDER_sun5.out'
+;if twelve then restore, dir+'slope_20120524_v2.out' else restore, dir+'slope_20120524_1600nm.out'
+;doy=145
+;if snow then begin
+;  restore, dir+'slope_20130110_1200nm_snow.out'
+;  doy=10
+;endif
+
+print, 'restoring the modeled files'
+;restore, dir+'slope_20120524.out'
+restore, dir+'slope_ic_20130110.out'
+restore, dir+'20120523_calibspcs.out'
+wvs=[515.,zenlambda[where(zenlambda gt wvls[1] and zenlambda lt wvls[2])]]
+;restore, dir+'slope_20120524.out'
+wvls=wvs
+doy=10;145
+
+
+; now get the full spectral model
+restore, dir+'sp_par_sza_v1_1_20130110.out'
+szas=acos(mu)/!dtor
+iws=[35,274,275,276,277,278,279,280,281,282,283,284,285]
+
+
+ntaus=n_elements(taus)
+nrefs=n_elements(refs)
+nszas=n_elements(szas)
+nwvls=n_elements(wvls)
+
+rad500=fltarr(ntaus,nrefs,nszas)
+irr500=fltarr(ntaus,nrefs,nszas)
+slorad=fltarr(ntaus,nrefs,nszas)
+sloirr=fltarr(ntaus,nrefs,nszas)
+
+; load extra terrestrial source file
+;F0=read_ascii('/home/leblanc/libradtran/libRadtran-1.5-beta/data/solar_flux/kurudz_1.0nm.dat',data_start=12)
+;sun=interpol(F0.field1[1,*]/1000.,F0.field1[0,*],wvls)
+
+;get the top of atmosphere irradiance to calculate the transmittance
+print, 'getting extra terrestrial irradiance'
+if not win then begin
+F_o=read_ascii('/home/leblanc/libradtran/libRadtran-1.6-beta/data/solar_flux/kurudz_1.0nm.dat', comment_symbol='#',data_start=12)
+vis=read_ascii('/home/leblanc/libradtran/vis_1nm.dat')
+nir=read_ascii('/home/leblanc/libradtran/nir_1nm.dat')
+endif else begin
+  F_o=read_ascii('kurudz_1.0nm.dat', comment_symbol='#',data_start=12)
+  vis=read_ascii('vis_1nm.dat')
+  nir=read_ascii('nir_1nm.dat')
+endelse
+F_o.field1[1,*]=F_o.field1[1,*]/1000.
+vis.field1[1,*]=vis.field1[1,*]/total(vis.field1[1,*])
+nir.field1[1,*]=nir.field1[1,*]/total(nir.field1[1,*])
+fvis=fltarr(n_elements(F_o.field1[1,*]))
+fnir=fvis
+for i=7,n_elements(f_o.field1[0,*])-8 do for j=-7,7 do fvis[i]=fvis[i]+f_o.field1[1,i+j]*vis.field1[1,j]
+for i=15,n_elements(f_o.field1[0,*])-16 do for j=-15,15 do fnir[i]=fnir[i]+f_o.field1[1,i+j]*nir.field1[1,j]
+
+sun=[interpol(fvis,F_o.field1[0,*],wvls[0]),interpol(fnir,F_o.field1[0,*],wvls[1:*])]
+
+;sun=fltarr(nwvls,nszas)
+;suni=sun
+;
+;for i=0,nwvls-1 do begin
+;  for j=0,nszas-1 do begin
+;    sun[i,j]=mean(rad[1,i,*,*,j])
+;    suni[i,j]=mean(irr[1,i,*,*,j])
+;  endfor
+;endfor
+
+;stop
+;if iw lt 10 then rad[*,1:*,*,*,*]=rad[*,1:*,*,*,*]/1000. else rad[*,2:*,*,*,*]=rad[*,2:*,*,*,*]/1000. ; put this in because of problem with libradtran reader on janus...
+
+for i=0,ntaus-1 do begin
+  for j=0,nrefs-1 do begin
+    for k=0, nszas-1 do begin
+  ;    rad500[i,j,k]=rad[0,0,i,j,k]/sun[0]/cos(szas[k]*!dtor)
+  ;    irr500[i,j,k]=irr[0,0,i,j,k]/suni[0]
+  ;    rnorm=rad[0,1:*,i,j,k]/rad[0,1,i,j,k]
+  ;    inorm=irr[0,1:*,i,j,k]/irr[0,1,i,j,k]*suni[1]/suni[1:*]
+
+ ;; for the sp_hiu format
+      rad500[i,j,k]=sp_hiu[i,j,1,iws[0],k]/sun[0]/cos(szas[k]*!dtor)
+      rnorm=sp_hiu[i,j,1,iws[1:*],k]/sun[1:*]/cos(szas[k]*!dtor)/sp_hiu[i,j,1,iws[1],k]
+      rnorm=sp_hiu[i,j,1,iws[1:*],k]/sp_hiu[i,j,1,iws[1],k]
+
+      rtmp=linfit(wvls[1:*],rnorm)
+  ;    itmp=linfit(wvls[1:*],inorm)
+      ;if twowvl then slorad[i,j,k]=rad[0,iw,i,j,k]/sun[iw]/cos(szas[k]*!dtor) else $
+      if twowvl then slorad[i,j,k]=sp_hiu[i,j,1,iws[iw],k]/sun[iw]/cos(szas[k]*!dtor) else $
+      slorad[i,j,k]=rtmp[1]
+  ;    sloirr[i,j,k]=itmp[1]
+;stop
+              ; See McBride et al (2011, ACP)
+              ; The slope was calculated by fitting a line to the transmittance normalized by the transmittance at 1565 nm.
+    endfor
+  endfor
+endfor
+
+if twowvl then lbl='_2wvl' else lbl=''
+if twelve then lbl=lbl+'_1227nm' else lbl=lbl+'_1600nm'
+if snow then lbl=lbl+'_snow'
+;save, wvls, sun, suni, taus,refs,szas,doy,rad500,irr500,slorad,sloirr,doy,filename=dir+'CLD_LUT.out'
+save, wvls, sun, taus, refs, szas, doy, rad500, slorad, filename=dir+'CLD_LUT_ic'+lbl+'.out'
+stop
+
+; now do the same for a hires LUT
+print, 'doing Hires'
+tas=(findgen(70)*2.8+5.)/2.
+;res=findgen(70)*0.7+0.5
+nr=51
+res=findgen(nr)+10.
+;r5=fltarr(ntaus,70)
+;s5=fltarr(ntaus,70)
+;rad=fltarr(70,70,nszas)
+;slo=fltarr(70,70,nszas)
+r5=fltarr(ntaus,nr)
+s5=fltarr(ntaus,nr)
+rad=fltarr(70,nr,nszas)
+slo=fltarr(70,nr,nszas)
+
+for i=0, nszas-1 do begin
+  for j=0, ntaus-1 do begin
+    r5[j,*]=interpol(rad500[j,*,i],refs,res)
+    s5[j,*]=interpol(slorad[j,*,i],refs,res)
+  endfor
+  for k=0, n_elements(res)-1 do begin
+    rad[*,k,i]=interpol(r5[*,k],taus,tas)
+    slo[*,k,i]=interpol(s5[*,k],taus,tas)
+  endfor
+endfor
+taus_hi=tas
+refs_hi=res
+radhi=rad
+slohi=slo
+
+save, wvls, sun, taus_hi, refs_hi, szas, doy, radhi, slohi, filename=dir+'CLD_LUT_HIRES_t100_ic'+lbl+'.out'
+stop
+end

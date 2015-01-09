@@ -1,0 +1,111 @@
+;+
+; NAME:
+;   read_SKS
+;
+; PURPOSE:
+;   Program to read in the '*.SKS' binary files produced by SKS spectrometer system
+;
+; CATEGORY:
+;   SKS read data
+;
+; CALLING SEQUENCE:
+;   read_SKS, file, spect, eos, shutter, inttime, temps, UTC, count, ndarks, darks
+;   - file: file to be opened and read
+;   - spect: array of all spectra (including the darks) for all spectrometers 
+;            countx256x4
+;            0 - Si rad, 1 - In rad, 2 - Si irr, 3 - In irr
+;   - eos: end of signal check for each time and spectrometer
+;   - shutter: shutter signal (opened=1, closed=0) for each spectrometer
+;   - inttime: integration time for each spectrometer and time
+;   - temps: array of temperatures
+;   - UTC: time in UTC format (hours)
+;   - count: number of spectra in file (including darks
+;   - ndarks: number of darks in file
+;   - darks: array of dark spectra
+;   
+; OUTPUT:
+;   arrays of measurements
+;
+; KEYWORDS:
+;   none
+;
+; DEPENDENCIES:
+;   none
+; 
+; NEEDED FILES:
+;   - *.SKS files
+;   
+; EXAMPLE:
+;   
+;
+; MODIFICATION HISTORY:
+; Written:  Samuel LeBlanc, Ocotber 14th, 2012, Ottawa, Canada
+; Modified: 
+;           
+;---------------------------------------------------------------------------
+
+pro read_SKS,file, spect, eos, shutter, inttime, temps, UTC, count,ndarks,darks
+f=file_search(file,count=m)
+if m lt 1 then message, 'File does not exist'
+
+; make the appropriate arrays
+bignum  = 2000
+spect   = fltarr(bignum,256,4) ; all the spectra, including the darks
+darks   = fltarr(bignum,256,4) ; all the darks
+eos     = intarr(bignum,4) 
+shutter = intarr(bignum,4)
+inttime = intarr(bignum,4)
+temps   = dblarr(bignum,9) ; all the temperatures
+UTC     = dblarr(bignum) ; the timing
+count   = 0
+ndarks  = 0
+old_shut= 1
+
+; 0 - si radiance
+; 2 - si irradiance
+; 1 - ingaas radiance
+; 3 - ingaas irradiance
+
+;set the data structure
+data={frac_sec:double(0),sec:long(0),min:long(0),hour:long(0),day:long(0),month:long(0),year:long(0),dow:long(0),doy:long(0),DST:long(0),$
+ nul:long(0),temp:dblarr(9),$
+ int_timesr:long(0),shuttersr:byte(0),EOSsr:byte(0),nul1:long(0),Spectrasr:lonarr(256),$
+ int_timesi:long(0),shuttersi:byte(0),EOSsi:byte(0),nul2:long(0),Spectrasi:lonarr(256),$
+ int_timeir:long(0),shutterir:byte(0),nul3:long(0),Spectrair:lonarr(256),$
+ int_timeii:long(0),shutterii:byte(0),nul4:long(0),Spectraii:lonarr(256)}
+
+openr,lun,f[0],/get_lun
+on_ioerror,out
+while not eof(lun) do begin
+  
+  readu,lun,data ;must verify that each array has some values (check nul and spctsz before reading the temps and the spectra)
+
+  if data.nul1 ne 256 then message, 'data corrupt'
+  
+  ;put into arrays
+  spect[count, *,0]=data.Spectrasr & eos[count,0]=data.EOSsr & shutter[count,0]=data.shuttersr & inttime[count,0]=data.int_timesr
+  spect[count, *,2]=data.Spectrasi & eos[count,2]=data.EOSsi & shutter[count,2]=data.shuttersi & inttime[count,2]=data.int_timesi
+  spect[count, *,1]=data.Spectrair & eos[count,1]=data.EOSsr & shutter[count,1]=data.shutterir & inttime[count,1]=data.int_timeir
+  spect[count, *,3]=data.Spectraii & eos[count,3]=data.EOSsi & shutter[count,3]=data.shutterii & inttime[count,3]=data.int_timeii
+  temps[count, *]  =data.temp
+  UTC[count]       =double(data.hour)+double(data.min)/60.d0+double(data.sec)/3600.d0+double(data.frac_sec)/3600.d0
+  if spect[count,45,0] lt 65  then begin
+    darks[ndarks,*,*]=spect[count,*,*]
+    ndarks=ndarks+1
+    shutter[count,*]=[[0],[0],[0],[0]]
+  endif else shutter[count,*]=[[1],[1],[1],[1]]
+  count=count+1
+endwhile
+out:
+;now make the arrays the proper length
+spect=spect[0:count-1,*,*] & eos=eos[0:count-1,*] & shutter=shutter[0:count-1,*] & inttime=inttime[0:count-1,*]
+temps=temps[0:count-1,*]
+UTC=UTC[0:count-1]
+if ndarks eq 0 then darks=0 else begin
+  darks=darks[0:ndarks-1,*,*]
+  ndarks=ndarks-1
+endelse
+  
+  count=count-1
+  ;stop
+end

@@ -1,0 +1,33 @@
+Mie Lab
+
+#2
+
+first part:
+N = 100cm-3
+reff= 10 microns
+veff= 0.1
+alpha=7
+
+lambda=	0.87		1.64		2.13		11.0
+nr =	1.33		1.3170		1.2959		1.1554	
+ni = 	0.3249E-6	0.791E-4	0.3958E-3	0.9817E-1
+T=273K
+
+
+second part:
+N = 100cm-3
+reff=5 microns
+
+lambda =	1.64
+nr = 		1.3170
+ni = 		0.791E-4
+T=273
+
+Third part:
+N = 200cm-3
+reff=0.7 microns
+alpha = 1
+
+lambda = 0.65 microns
+nr = 1.56
+ni = 0.01

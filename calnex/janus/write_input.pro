@@ -1,0 +1,89 @@
+;+
+; NAME:
+;   write_input_tau_file
+;
+; PURPOSE:
+;   write aerosol tau file for rad transfer retrieval (input for uvspec) libRadtran 1.5
+;
+; CATEGORY:
+;   CALNEX / LibRadtran input
+;
+; CALLING SEQUENCE:
+;   write_input, z, near
+;     - z: levels of hsrl values
+;     - near: structure from the calnex_hsrl_p3 (for may 16th and 19th)
+;
+; OUTPUT:
+;   aerosol optical depth for each levels required by uvspec in a file
+;
+; KEYWORDS:
+;   - index:   specifies the index to use from the path (which point on near.extinction to use)
+;   - atm_in:  specifies the atmosphere file to use
+;   - tau_out: sets the optical depth out file name
+;   - alt:     returns the altitude at which tau is calculated
+;   - tau_good:returns the optical thickness at different altitudes
+;
+; DEPENDENCIES:
+;
+; NEEDED FILES:
+;   - AERO_TAU.DAT file
+;
+; EXAMPLE:
+;
+;
+; MODIFICATION HISTORY:
+; Written:  Samuel LeBlanc, LASP CU Boulder,August 11th, 2010
+; Modified:  August, 18th, 2010 by Samuel LeBlanc
+;           - added tau_good and alt keywords for returning the values of tau at different altitudes
+; Modified: January 5th, 2012 by Samuel LeBlanc, Birthday, Ottawa, On
+;           - changed tau_out to be the full path of the tau_out file
+;- --------------------------------------------------------------------------
+
+pro write_input_tau_file, z, near, index=index, atm_in=atm_in, tau_out=tau_out, quiet=quiet, tau_good=tau_good, alt=alt
+
+if not keyword_set(index) then index=0 
+
+if !VERSION.OS eq 'linux' then linux=1 else linux=0 
+if linux then dir='/home/leblanc/libradtran/input/aero/' else dir='\\lasp-smb\leblanc\libradtran\input\aero\'
+
+if not keyword_set(atm_in) then in ='atmos_aero_20100519_at.dat' else in=atm_in
+
+;if not keyword_set(quiet) then print, 'opening file ' + dir+in+' to read z levels'
+;aero_tau=read_ascii(dir+in, comment='#')
+;alt=aero_tau.field1[0,*] ;from 130 km down to 0km
+alt=[100.,90.,80.,70.,60.,50.,45.,40.,35.,30.,25.,20.,15.,10.,5.,4.9,4.8,4.7,4.6,4.5,4.4,4.3,4.2,4.1,4.0,3.9,3.8,3.7,3.6,3.5,3.4,3.3,3.2,$
+     3.1,3.0,2.9,2.8,2.7,2.6,2.5,2.4,2.3,2.2,2.1,2.0,1.9,1.8,1.7,1.6,1.5,1.4,1.3,1.2,1.1,1.0,0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0.0]
+ 
+;print, near.extinction[*,index],z
+;z=[z,30000.0,40000.0]      ;make 30km and 40km altitude go to zero
+;extinction=[near.extinction,fltarr(1,81),fltarr(1,81)]
+tau_good=alt*0.0
+for j=1, n_elements(alt)-1 do begin
+  alts=where((z/1000.0) le alt[j-1] and (z/1000.0) ge alt[j],count)
+  if count gt 0 then begin
+    for ii=0 , count-1 do if not finite(near.extinction[alts[ii],index]) then near.extinction[alts[ii],index]=0.0
+    tau_good[j] = total(near.extinction[alts, index] * (z[alts+1]-z[alts])/1000.0,/nan)    
+  endif else tau_good[j]=0.0
+endfor
+
+if n_elements(tau_out) ne 0 then $
+ file=tau_out $ 
+else begin
+file='aero_tau.level'
+tau_out=file
+endelse
+
+if not keyword_set(quiet) then print, 'setting up file to' + file
+
+openw, lun, file ,/get_lun
+printf, lun, '# Tau values for different levels'
+printf, lun, '# Level (m)	tau'
+
+for i=0, n_elements(alt)-1 do begin
+	if not finite(tau_good[i]) or tau_good[i] lt 0.0 then tau_good[i]=0.0
+	printf, lun, alt[i], tau_good[i]
+endfor
+close, lun
+free_lun, lun
+
+end

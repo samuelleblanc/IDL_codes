@@ -1,0 +1,49 @@
+IDL Version 7.0.8 (linux x86_64 m64). (c) 2009, ITT Visual Information Solutions
+Installation number: 100-550.
+Licensed for use by: University of Colorado
+
+% Error opening file.
+  File: \\lasp-smb\leblanc\arctas\pro\write_input_aats.pro
+% Compiled module: WRITE_INPUT_AATS.
+% Compiled module: JULIAN_DAY.
+% Compiled module: ZENSUN.
+% Error opening file.
+  File: \\lasp-smb\leblanc\libradtran\pro\libradtran_reader.pro
+% Compiled module: LIBRADTRAN_READER.
+% Error opening file. File: read_aeronet.pro
+% Error opening file.
+  File: \\lasp-smb\leblanc\CALNEX\pro\read_aeronet.pro
+% Compiled module: GET_AATS_ALL.
+% Error opening file.
+  File: \\lasp-smb\leblanc\arctas\pro\get_aats_all.pro
+% Compiled module: JULIAN_DAY.
+% Compiled module: ZENSUN.
+% Compiled module: RPH2ZA.
+% Compiled module: MUSLOPE.
+% Compiled module: NAV_NASA.
+% Error opening file.
+  File: \\lasp-smb\leblanc\arctas\pro\nav_nasa.pro
+% Compiled module: ARCTAS_RTM_AERO.
+% Compiled module: WRITE_INPUT_FILE.
+% Compiled module: CFG.
+% Compiled module: SPLINE.
+% Compiled module: INTERPOL.
+% Compiled module: MAP_2POINTS.
+% Compiled module: MEAN.
+% Compiled module: MOMENT.
+% Compiled module: LOADCT.
+% Compiled module: FILEPATH.
+% Compiled module: PATH_SEP.
+% LOADCT: Loading table Rainbow + white
+% Compiled module: LEGEND.
+% LOADCT: Loading table Rainbow + white
+% Compiled module: MAP_SET.
+% Compiled module: CROSSP.
+% Compiled module: MAP_GRID.
+% Compiled module: MAP_CONTINENTS.
+% Compiled module: REVERSE.
+% Stop encountered: ARCTAS_RTM_AERO   585 /home/leblanc/arctas/pro/arctas_rtm_a
+  ero.pro
+% Compiled module: READ_ASCII.
+% Compiled module: QUERY_ASCII.
+% Compiled module: UNIQ.

@@ -1,0 +1,469 @@
+;+
+; NAME:
+;   run_pdfs
+;
+; PURPOSE:
+;   program to run through the bayes theorem by multiplying the different pdfs
+;   uses the pdf lut for the various parameters
+;   Takes in a measurement pdf derived from measured downwelling radiance spectra of clouds
+;
+;   post_pdf=prior_pdf*meas_pdf*model_pdf
+;
+;    runs the program for a single spectra
+;    is used as a part of the retrieve_pdfs program
+;    the input measurement pdf is normalized and calculated for the appropriate uncertainty
+;
+; CATEGORY:
+;   Cloud Retrieval / Radiance /GENRA
+;
+; CALLING SEQUENCE:
+;   run_pdfs, pars_pdf,bins, taus, ref, wp, meas_pdf, post_tau, post_ref, post_wp, H, H_ind, H_par,tau_err,ref_err,wp_err,post
+;     - pars_pdf: the look up table in pdf format (tau,ref,wp,parameter,bins) - normalized input
+;     - bins:     the bin value for each element in the look up table in pdf format and measurement pdf -input
+;     - taus:     the array of taus for the post pdf - input
+;     - ref:      the array of ref for the post pdf - input
+;     - wp:       the array of water phase (0 for water and 1 for 100% ice) - input
+;     - meas_pdf: the array of the measurement pdf of parameters in bin space - normalized input
+;     - post_tau: the value of the retrieved tau - output
+;     - post_ref: the value of the retrieved ref - output
+;     - post_wp:  the value of the water phase - output
+;     - H:        the value of the total normalized shannon information content
+;     - H_ind:    an array of normalized shannon information content for each parameter individually, with non updating prior
+;     - H_par:    an array of normalized shannon information content for each parameter, with updating prior
+;     - tau_err:  an array with low and high bounds of uncertainty for the retrieved tau
+;     - ref_err:  an array with low and high bounds of uncertainty for the retrieved ref
+;     - wp_err:   a value of uncertainty of the retrieved wp
+;     - post:     the posterior pdf in parameter space
+;
+; OUTPUT:
+;   - retrieved products and related shannon information content in variables
+;
+; KEYWORDS:
+;   - ic_prob:   array of probabilities for ice cloud [2,npar] 0: independent calculated, 1: updated prior
+;   - li_prob:   array of probabilities for liquid cloud [2,npar] 0: independent calculated, 1: updated prior
+;   - ps:        array of indices of the subset of parameter to use 
+;
+; DEPENDENCIES:
+;   none
+;   
+; NEEDED FILES:
+;   none
+;  
+; EXAMPLE:
+;   run_pdfs,pars_pdf,bins, taus, ref, wp, meas_pdf,ta,re,w,H,Hi,Hm
+;
+; MODIFICATION HISTORY:
+; Written:  Samuel LeBlanc, Monday April 22nd, 2013, Boulder, Colorado, Snow day
+; Modified: by Samuel LeBlanc, Tuesday May 14th, 2013, Boulder, Colorado, hot day
+;           - added keyword wp_prob that returns the probability of phase for each parameter
+;             independently calculated and with the updated prior
+;           by Samuel LeBlanc, Happy Thursday, May 16th, 2013, Boulder, Colorado
+;           - added the ps keyword which holds the array of indices of parameters to run over
+;             instead of the entire range.
+;           by Samuel LeBlanc, July 3rd, 2013, Boulder, Colorado
+;           - changed some processing, 
+;           - added a homogenization factor to account for differences between each parameter pdf
+;           by Samuel LeBlanc, October 12th, 2013, Boulder Colorado
+;           - changed to use new parameters methodology v1
+;           - returns partial tau and ref SIC, does not return phase
+;           - only takes in already phase discriminated bins, pars_pdf
+;           by Samuel LeBlanc, October 30th, 2013, Boulder, Colorado
+;           - split up the main run_pdfs inot multiple subroutines for easier management
+;           - started to integrate both phase segregated and non phase segregated, not yet finished
+;           - make sure to only go over meas_pdf where it is not zero
+;--------------------------------------------------------------------------
+
+
+pro run_pdfs,pars_pdf,bins,taus,ref,wp,meas_pdf,post_tau,post_ref,post_wp,H,H_ind,H_par,tau_err,ref_err,wp_err,post,$
+  ic_prob=ic_prob,li_prob=li_prob,ps=ps, post_pdf=post_pdf,h_tau, h_ref,ptot=ptot,post_meas=post_meas,pmin,pmax
+
+if n_elements(size(pars_pdf,/dimension)) gt 4 then message, 'run_pdfs uses phase seperated lut, input is not phase seperated'
+if keyword_set(ps) then limp=1 else limp=0
+
+xplot=0
+win=0
+
+; par is the array with all retrieval parameters
+bins=double(bins)
+; make the pdf of measurement and prior
+xs=fltarr(n_elements(bins))
+if limp then npar=n_elements(ps) else npar=n_elements(meas_pdf[*,0])-1
+;prio_pdf  =dblarr(n_elements(taus),n_elements(ref),n_elements(wp),npar+1)+1.d0
+;post      =dblarr(n_elements(taus),n_elements(ref),n_elements(wp))
+;post_meas =dblarr(n_elements(taus),n_elements(ref),n_elements(wp),npar)
+prio_pdf  =dblarr(n_elements(taus),n_elements(ref),npar+1)+1.d0
+post      =dblarr(n_elements(taus),n_elements(ref))
+post_meas =dblarr(n_elements(taus),n_elements(ref),npar)
+post_ind  = post_meas
+meas_jpdf = pars_pdf
+
+if xplot then begin
+  p_likely  = pars_pdf
+  if win then set_plot,'win' else set_plot, 'x'
+  device, decomposed=0
+  loadct,39
+  window, 0, retain=2,xsize=1200,ysize=900
+  !p.multi=[0,4,4]
+endif
+
+for pi=0, npar-1 do begin
+  p=ps[pi]
+  mf=where(meas_pdf[p,*] gt 0. and bins[p,*] ge pmin[p] and bins[p,*] le pmax[p])
+  if n_elements(mf) lt 2 then mf=[mf[0]-1,mf[0],mf[0]+1]
+  print, p,format='(I3,".",$)' 
+  if not finite(total(meas_pdf[p,mf])) then message, 'problem with meas pdf values' 
+  for b=0, n_elements(bins[0,mf])-1 do meas_jpdf[*,*,p,mf[b]]=meas_pdf[p,mf[b]]
+  
+  if xplot then begin
+    p_likely[*,*,pi,mf]=meas_jpdf[*,*,p,mf]*pars_pdf[*,*,p,mf]
+    post_meas[*,*,pi]=total(p_likely[*,*,p,mf],4)
+  endif else $
+   post_meas[*,*,pi]=total(meas_jpdf[*,*,p,mf]*pars_pdf[*,*,p,mf],4)
+;  if not finite(total(post_meas[*,*,*,pi])) then message, 'problem with post meas pdf value'
+  
+  if xplot then begin
+    nns=where(meas_pdf[p,*] gt 0.)
+    plot, bins[p,*],pars_pdf[0,0,p,*],title='Parameter :'+strtrim(p,2), yrange=[0,0.4],xstyle=0,xr=[bins[p,min(nns)],bins[p,max(nns)]]
+    for t=0, n_elements(pars_pdf[*,0,0,0])-1, 20 do for r=0, n_elements(pars_pdf[0,*,0,0])-1, 10 do oplot, bins[p,*],pars_pdf[t,r,p,*]
+    oplot, bins[p,*],meas_pdf[p,*],color=250
+    for t=0, n_elements(pars_pdf[*,0,0,0])-1, 10 do for r=0, n_elements(pars_pdf[0,*,0,0])-1, 5 do $
+      oplot, bins[p,*],p_likely[t,r,p,*], color=70
+    ;for i=0,npar-1-16 do plot, findgen(10)
+    ;cursor, x,y
+  endif
+endfor ;end of par loop making the likely hood function and joint-pdf (without prior)
+
+if xplot then begin
+  for i=pi, 15 do plot, findgen(10)
+; cursor, x,y
+stop
+endif
+
+; now homogenize all joint of each parameter to each other
+homogenize, post_meas, prio_pdf,post_ind,npar
+
+; now set the posterior pdfs, normalize it, and get the post_tau, and post_ref
+post_norm, prio_pdf,post,post_pdf,post_tau,post_ref, npar,taus,ref,failed=failed
+if failed then goto, fail
+if n_elements(ref) gt 30 then post_wp=0 else post_wp=1
+
+;calculate the shanon information content for pdfs
+sic_pdf, prio_pdf, post_pdf, post_ind, post, npar, ic_prob,li_prob, H_par,H_ind,H
+
+; calculate the marginal pdfs, and the shannon information content from each marginal pdf
+marg_pdf, post, prio_pdf, taus, ref, post_t, post_r, h_tau, h_ref
+
+; now determine the effective uncertainty for tau and ref from the marginal pdfs
+uncertainty, post_t,post_r,taus,ref, tau_err, ref_err
+
+goto,ends ; if gotten to this point, then go directly to the end
+
+fail:  ; if retrieval failed, then goto here
+nan=!values.f_nan
+post_tau=nan & post_ref=nan & post_wp=nan & tau_err=[nan,nan] & ref_err=[nan,nan] & wp_err=nan
+H=nan & H_par=H_par*nan & H_ind=H_ind*nan & ic_prob=ic_prob*nan & li_prob=li_prob*nan
+
+ends:
+;stop
+end
+
+
+pro run_pdfs_all,pars_pdf,bins,taus,ref,wp,meas_pdf,post_tau,post_ref,post_wp,H,H_ind,H_par,tau_err,ref_err,wp_err,post,$
+  ic_prob=ic_prob,li_prob=li_prob,ps=ps, post_pdf=post_pdf,h_tau, h_ref,ptot=ptot,post_meas=post_meas
+
+if n_elements(size(pars_pdf,/dimension)) gt 5 then message, 'run_pdfs uses phase seperated lut, input is not phase seperated'
+if keyword_set(ps) then limp=1 else limp=0
+
+xplot=0
+win=1
+wp=[0,1]
+; par is the array with all retrieval parameters
+bins=double(bins)
+; make the pdf of measurement and prior
+xs=fltarr(n_elements(bins))
+if limp then npar=n_elements(ps) else npar=n_elements(meas_pdf[*,0])-1
+prio_pdf  =dblarr(n_elements(taus),n_elements(ref),n_elements(wp),npar+1)+1.d0
+post      =dblarr(n_elements(taus),n_elements(ref),n_elements(wp))
+post_meas =dblarr(n_elements(taus),n_elements(ref),n_elements(wp),npar)
+;prio_pdf  =dblarr(n_elements(taus),n_elements(ref),npar+1)+1.d0
+;post      =dblarr(n_elements(taus),n_elements(ref))
+;post_meas =dblarr(n_elements(taus),n_elements(ref),npar)
+post_ind  = post_meas
+meas_jpdf = pars_pdf
+
+if xplot then begin
+  p_likely  = pars_pdf
+  if win then set_plot,'win' else set_plot, 'x'
+  device, decomposed=0
+  loadct,39
+  window, 0, retain=2,xsize=1200,ysize=900
+  !p.multi=[0,4,4]
+endif
+
+for pi=0, npar-1 do begin
+  p=ps[pi]
+  mf=where(meas_pdf[p,*] gt 0.)
+  if n_elements(mf) lt 2 then mf=[mf[0]-1,mf[0],mf[0]+1]
+  print, p,format='(I3,".",$)'
+  if not finite(total(meas_pdf[p,mf])) then message, 'problem with meas pdf values'
+  for b=0, n_elements(bins[0,mf])-1 do meas_jpdf[*,*,*,p,mf[b]]=meas_pdf[p,mf[b]]
+
+  if xplot then begin
+    p_likely[*,*,pi,mf]=meas_jpdf[*,*,p,mf]*pars_pdf[*,*,p,mf]
+    post_meas[*,*,pi]=total(p_likely[*,*,p,mf],4)
+  endif else $
+   post_meas[*,*,*,pi]=total(meas_jpdf[*,*,*,p,mf]*pars_pdf[*,*,*,p,mf],5)
+stop
+;  if not finite(total(post_meas[*,*,*,pi])) then message, 'problem with post meas pdf value'
+
+  if xplot then begin
+    nns=where(meas_pdf[p,*] gt 0.)
+    plot, bins[p,*],pars_pdf[0,0,p,*],title='Parameter :'+strtrim(p,2), yrange=[0,0.4],xstyle=0,$
+     xr=[bins[p,min(nns)],bins[p,max(nns)]]
+    for t=0, n_elements(pars_pdf[*,0,0,0])-1, 20 do for r=0, n_elements(pars_pdf[0,*,0,0])-1, 10 do $
+     oplot, bins[p,*],pars_pdf[t,r,p,*]
+    oplot, bins[p,*],meas_pdf[p,*],color=250
+    for t=0, n_elements(pars_pdf[*,0,0,0])-1, 10 do for r=0, n_elements(pars_pdf[0,*,0,0])-1, 5 do $
+      oplot, bins[p,*],p_likely[t,r,p,*], color=70
+    ;for i=0,npar-1-16 do plot, findgen(10)
+    ;cursor, x,y
+  endif
+endfor ;end of par loop making the likely hood function and joint-pdf (without prior)
+ 
+if xplot then begin
+  for i=pi, 15 do plot, findgen(10)
+; cursor, x,y
+stop
+endif
+ 
+; now homogenize all joint of each parameter to each other
+homogenize, post_meas, prio_pdf,post_ind,npar
+ 
+; now set the posterior pdfs, normalize it, and get the post_tau, and post_ref
+post_norm, prio_pdf,post,post_pdf,post_tau,post_ref, npar,taus,ref,failed=failed,post_wp
+if failed then goto, fail
+;if n_elements(ref) gt 30 then post_wp=0 else post_wp=1
+ 
+;calculate the shanon information content for pdfs
+sic_pdf, prio_pdf, post_pdf, post_ind, post, npar, ic_prob,li_prob, H_par,H_ind,H
+ 
+; calculate the marginal pdfs, and the shannon information content from each marginal pdf
+if post_wp then begin
+postt=post[*,9:*,1] & reft=ref[9:*]
+endif else begin
+postt=post[*,0:29,0] & reft=ref[0:29]
+endelse
+marg_pdf, postt, prio_pdf, taus, reft, post_t, post_r, h_tau, h_ref
+ 
+; now determine the effective uncertainty for tau and ref from the marginal pdfs
+uncertainty, post_t,post_r,taus,ref, tau_err, ref_err
+ 
+goto,ends ; if gotten to this point, then go directly to the end
+ 
+fail:  ; if retrieval failed, then goto here
+nan=!values.f_nan
+post_tau=nan & post_ref=nan & post_wp=nan & tau_err=[nan,nan] & ref_err=[nan,nan] & wp_err=nan
+H=nan & H_par=H_par*nan & H_ind=H_ind*nan & ic_prob=ic_prob*nan & li_prob=li_prob*nan
+ 
+ends:
+;stop
+end
+
+
+
+
+;;;; procedure to homogenize parameters
+pro homogenize, post_meas, prio_pdf,post_ind,npar
+ if n_elements(size(post_meas,/dimension)) eq 3 then begin ; for phase segregated 
+   for pi=0, npar-1 do begin 
+    ;post_meas[*,*,pi]=post_meas[*,*,pi];*ptot/total(post_meas[*,*,pi]) 
+    ; now pass the prior to the solution 
+    prio_pdf[*,*,pi+1]=post_meas[*,*,pi]*prio_pdf[*,*,pi] 
+    post_ind[*,*,pi]=post_meas[*,*,pi]*prio_pdf[*,*,0]   
+    prio_pdf[*,*,pi+1]=prio_pdf[*,*,pi+1]/total(prio_pdf[*,*,pi+1],/nan) 
+    post_ind[*,*,pi]=post_ind[*,*,pi]/total(post_ind[*,*,pi],/nan) 
+   endfor ;end par loop 
+ endif else begin ; for non-phase segregated
+   for pi=0, npar-1 do begin
+    ;post_meas[*,*,pi]=post_meas[*,*,pi];*ptot/total(post_meas[*,*,pi]) 
+    ; now pass the prior to the solution 
+    prio_pdf[*,*,*,pi+1]=post_meas[*,*,*,pi]*prio_pdf[*,*,*,pi]
+    post_ind[*,*,*,pi]=post_meas[*,*,*,pi]*prio_pdf[*,*,*,0]
+    prio_pdf[*,*,*,pi+1]=prio_pdf[*,*,*,pi+1]/total(prio_pdf[*,*,*,pi+1],/nan)
+    post_ind[*,*,*,pi]=post_ind[*,*,*,pi]/total(post_ind[*,*,*,pi],/nan)
+   endfor ;end par loop 
+ endelse
+end
+
+
+;;;;; procedure to build the normalize the posterior pdf and get max values
+pro post_norm, prio_pdf,post,post_pdf,post_tau,post_ref, npar,taus, ref, failed=failed,post_wp
+ if n_elements(size(prio_pdf,/dimension)) eq 3 then begin ; for phase segregated
+   post_pdf=prio_pdf[*,*,1:*] ; set all post pdf to be prior of next iteration
+   if total(post_pdf[*,*,npar-1],/nan) lt 1E-50 then failed=1 else failed=0
+   post=post_pdf[*,*,npar-1] ; final post pdf is for last parameter
+ endif else begin ; for non-phase segregated
+   post_pdf=prio_pdf[*,*,*,1:*] ; set all post pdf to be prior of next iteration
+   if total(post_pdf[*,*,*,npar-1],/nan) lt 1E-50 then failed=1 else failed=0
+   post=post_pdf[*,*,*,npar-1] ; final post pdf is for last parameter
+ endelse 
+ ;now normalize the post probabilities
+ post=post/total(post) 
+ ; now get the maximum likelihood values
+ n=max(post,nmax)
+ ns=array_indices(post, nmax)
+ post_tau=taus[ns[0]]
+ post_ref=ref[ns[1]]
+ if n_elements(ns) eq 3 then post_wp=ns[2]
+end
+
+
+;;;;; procedure to calculate the shannon information content from the pdfs
+pro sic_pdf, prio_pdf, post_pdf, post_ind, post, npar, ic_prob,li_prob, H_par,H_ind,H   
+  
+ 
+ if n_elements(size(prio_pdf,/dimension)) eq 3 then begin ; for phase segregated
+ snorm=alog(n_elements(prio_pdf[*,*,0]))/alog(2.) 
+ sprio=(-1.)*total(prio_pdf[*,*,0]/total(prio_pdf[*,*,0])*alog(prio_pdf[*,*,0]/total(prio_pdf[*,*,0]))/alog(2.),/nan)
+ spost=(-1.)*total(post*alog(post)/alog(2.),/nan )
+ spostm=fltarr(npar) 
+ spriom=fltarr(npar) 
+ sposti=fltarr(npar) 
+ ic_prob=fltarr(2,npar) 
+ li_prob=fltarr(2,npar)  
+ for p=0, npar-1 do begin
+   spostm[p]=(-1.)*total(post_pdf[*,*,p]/total(post_pdf[*,*,p])$
+    *alog(post_pdf[*,*,p]/total(post_pdf[*,*,p]))/alog(2.),/nan)
+   spriom[p]=(-1.)*total(prio_pdf[*,*,p]/total(prio_pdf[*,*,p])$
+    *alog(prio_pdf[*,*,p]/total(prio_pdf[*,*,p]))/alog(2.),/nan)
+   sposti[p]=(-1.)*total(post_ind[*,*,p]/total(post_ind[*,*,p])$
+    *alog(post_ind[*,*,p]/total(post_ind[*,*,p]))/alog(2.),/nan)
+   ic_prob[0,p]=total(post_ind[*,*,p]) & li_prob[0,p]=total(post_ind[*,*,p])
+   ic_prob[1,p]=total(post_pdf[*,*,p]) & li_prob[1,p]=total(post_pdf[*,*,p])
+ endfor 
+endif else begin ; for non-segregated phase
+ snorm=alog(n_elements(prio_pdf[*,*,*,0]))/alog(2.)
+ sprio=(-1.)*total(prio_pdf[*,*,*,0]/total(prio_pdf[*,*,*,0])*alog(prio_pdf[*,*,*,0]/total(prio_pdf[*,*,*,0]))/alog(2.),/nan)
+ spost=(-1.)*total(post*alog(post)/alog(2.),/nan)        
+ spostm=fltarr(npar)  
+ spriom=fltarr(npar)  
+ sposti=fltarr(npar)    
+ ic_prob=fltarr(2,npar)  
+ li_prob=fltarr(2,npar)   
+ for p=0, npar-1 do begin 
+   spostm[p]=(-1.)*total(post_pdf[*,*,*,p]/total(post_pdf[*,*,*,p])$
+    *alog(post_pdf[*,*,*,p]/total(post_pdf[*,*,*,p]))/alog(2.),/nan)
+   spriom[p]=(-1.)*total(prio_pdf[*,*,*,p]/total(prio_pdf[*,*,*,p])$
+    *alog(prio_pdf[*,*,*,p]/total(prio_pdf[*,*,*,p]))/alog(2.),/nan)
+   sposti[p]=(-1.)*total(post_ind[*,*,*,p]/total(post_ind[*,*,*,p])$
+    *alog(post_ind[*,*,*,p]/total(post_ind[*,*,*,p]))/alog(2.),/nan)
+   ic_prob[0,p]=total(post_ind[*,*,1,p])/total(post_ind[*,*,*,p])
+   li_prob[0,p]=total(post_ind[*,*,0,p])/total(post_ind[*,*,*,p])
+   ic_prob[1,p]=total(post_pdf[*,*,1,p])/total(post_pdf[*,*,*,p])
+   li_prob[1,p]=total(post_pdf[*,*,0,p])/total(post_pdf[*,*,*,p])
+ endfor
+endelse
+ H=(sprio-spost)/snorm   
+ Hm=(spriom-spostm)/snorm
+ Hi=(sprio-sposti)/snorm
+ 
+ H_par=Hm
+ H_ind=Hi
+end
+
+
+;;;;; procedure to calculate the marginal pdfs
+pro marg_pdf, post, prio_pdf, taus, ref, post_t, post_r, h_tau, h_ref
+ post_t=total(post,2)
+ post_r=total(post,1)
+
+ ; now calculate the shannon information content from the marginal pdf
+ prior_t=post_t & prior_r=post_r
+ for t=0, n_elements(taus)-1 do prior_t[t]=total(prio_pdf[t,*,0])
+ for r=0, n_elements(ref)-1 do prior_r[r]=total(prio_pdf[*,r,0])
+ h_tau=(-1.)*total(post_t/total(post_t)*alog(post_t/total(post_t)+1.E-42)/alog(2.))
+ h_ref=(-1.)*total(post_r/total(post_r)*alog(post_r/total(post_r)+1.E-42)/alog(2.))
+ hnorm_r=alog(n_elements(prio_pdf[0,*,0]))/alog(2.)
+ hnorm_t=alog(n_elements(prio_pdf[*,0,0]))/alog(2.)
+ hprio_t=(-1.)*total(prior_t/total(prior_t)*alog(prior_t/total(prior_t)+1.E-42)/alog(2.))
+ hprio_r=(-1.)*total(prior_r/total(prior_r)*alog(prior_r/total(prior_r)+1.E-42)/alog(2.))
+ h_tau=(hprio_t-h_tau)/hnorm_t
+ h_ref=(hprio_r-h_ref)/hnorm_r
+end
+
+;;;;; procedure to calculate the uncertainty in tau and ref from marginal pdfs
+pro uncertainty, post_t,post_r,taus,ref, tau_err, ref_err 
+
+ tau_err=sqrt(total(post_t*taus^2)-total(post_t*taus)^2)
+ ref_err=sqrt(total(post_r*ref^2)-total(post_r*ref)^2)
+;stop
+; tstd=stddev(post_t)
+; rstd=stddev(post_r)
+; tau_err=fltarr(2)
+; nt=where(post_t ge post_t[ns[0]]/100.*25.)
+; if min(nt) eq 0 and n_elements(nt) gt 1 then nt=nt[1:*]
+; tau_err[0]=min(taus[nt])
+; tau_err[1]=max(taus[nt])
+; ref_err=fltarr(2)
+; nr=where(post_r ge post_r[ns[1]]/100.*25.)
+; ref_err[0]=min(ref[nr])
+; ref_err[1]=max(ref[nr])
+ ;ref_err[0]=median(re[0:inre-1],/even)
+ ;ref_err[1]=median(re[inre:*],/even)
+ ;ref_err=[ref[nl],ref[nh]]
+
+end
+
+
+;;;; function to return the half-width half-max value of the peak in a pdf
+function hwhm, post, taus, refs
+  if n_elements(post[0,*]) eq 51 then ice=1 else ice=0
+
+  ; get the max likelihood
+  nn=max(post,n,/nan)
+  in=array_indices(post,n)
+  tmax=taus[in[0]]
+  if ice then rmax=refs[in[1]+9] else rmax=refs[in[1]]
+  if ice then ref=refs[9:*] else ref=refs[0:29]
+
+  pt=total(post,2)
+  if ice then pr=total(post[*,9:*],1) else pr=total(post[*,0:29],1)
+  ter=sqrt(total(pt*taus^2)-total(pt*taus)^2)
+  if ice then $
+   rer=sqrt(total(pr*refs[9:*]^2)-total(pr*refs[9:*])^2) else $
+    rer=sqrt(total(pr*refs[0:29]^2)-total(pr*refs[0:29])^2)
+
+  ; get the half max point in tau direction
+  if in[0] ge n_elements(taus)-1 then dtp=taus[n_elements(taus)-1] else dtp=interpol(taus[in[0]:*],post[in[0]:*,in[1]],nn/2.)
+  if in[0] eq 0 then dtm=0. else dtm=interpol(taus[0:in[0]],post[0:in[0],in[1]],nn/2.)
+  htp=dtp-tmax & htm=tmax-dtm
+  tfr=(htp+htm)/2.
+  ; get the half max point in ref direction
+  if in[1] ge n_elements(ref)-1 then drp=ref[n_elements(ref)-1] else drp=interpol(ref[in[1]:*],post[in[0],in[1]:*],nn/2.)
+  if in[1] eq 0 then drm=0. else drm=interpol(ref[0:in[1]],post[in[0],0:in[1]],nn/2.)
+  hrp=drp-rmax & hrm=rmax-drm
+  rfr=(hrp+hrm)/2.
+return, [ter,rer]
+end
+
+;;;;; procedure that returns the errors for tau and ref for a post pdf of each parameter
+pro pdf_err,post,taus, refs,terr,rerr
+  np=n_elements(post[0,0,*])
+  terr=fltarr(np) & rerr=fltarr(np)
+  for p=0, np-1 do begin
+    z=hwhm(post[*,*,p],taus,refs)
+    terr[p]=z[0] & rerr[p]=z[1]
+  endfor
+end
+
+
+; make a function to calculate the shannon information content
+function SIC, post,prio_pdf
+  ;calculate the shanon information content
+  snorm=alog(n_elements(post))/alog(2.)
+  if n_elements(priod_pdf) lt 1 then prio_pdf=post*0.+1.
+  sprio=(-1.)*total(prio_pdf/total(prio_pdf)*alog(prio_pdf/total(prio_pdf))/alog(2.))
+  spost=(-1.)*total(post*alog(post+1.E-42)/alog(2.))
+  H=(sprio-spost)/snorm
+return,h
+end

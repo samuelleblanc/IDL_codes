@@ -1,0 +1,52 @@
+; program to plot the slopes
+; for each paarameter
+
+pro plot_slopes
+
+restore, 'C:\Users\Samuel\Research\SSFR3\Data\slopes.out'
+dir='C:\Users\Samuel\Research\SSFR3\plots\'
+
+fp=dir+'par_slopes'
+print, 'making plot :'+fp
+set_plot, 'ps'
+ loadct, 39, /silent
+ device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8., filename=fp+'.ps'
+ device, xsize=40, ysize=26
+  !p.font=1 & !p.thick=5 & !p.charsize=4.8 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8
+  !p.multi=[0,4,4] & !x.margin=[6,1.5] & !y.margin=[0.155555,0.4] & !y.omargin=[3,1]
+
+tvlct,220,220,220,201
+tvlct,250,200,200,251
+tvlct,200,200,250,71
+
+
+;tau=tau_hires
+ for p=0, 14 do begin
+
+  if p gt 10 then plot, taus,slopes[*,14,0,p],xtitle='Optical thickness',xrange=[1,100],ytitle='!9h!X!D'+string(p+1,format='(I2)')+'!N',yr=yr, xticklen=0.1,/nodata else $
+   plot, taus,slopes[*,14,0,p],xtickname=[' ',' ',' ',' ',' ',' '],xrange=[1,100],ytitle='!9h!X!D'+string(p+1,format='(I2)')+'!N',yr=yr, xticklen=0.1,/nodata
+
+;  polyfill,[tau[0:99],reverse(tau[0:99])],[avg[0:99,14,0,p]-std[0:99,14,0,p],reverse(avg[0:99,14,0,p]+std[0:99,14,0,p])],color=201
+  oplot,taus,slopes[*,14,0,p],thick=7
+;  polyfill,[tau[0:99],reverse(tau[0:99])],[avg[0:99,14,1,p]-std[0:99,14,1,p],reverse(avg[0:99,14,1,p]+std[0:99,14,1,p])],color=201
+  oplot,taus,slopes[*,14,1,p],linestyle=2,thick=7
+
+;  polyfill,[tau[0:99],reverse(tau[0:99])],[avg[0:99,24,0,p]-std[0:99,24,0,p],reverse(avg[0:99,24,0,p]+std[0:99,24,0,p])],color=71
+  oplot,taus,slopes[*,24,0,p],color=70,thick=7
+;  polyfill,[tau[0:99],reverse(tau[0:99])],[avg[0:99,24,1,p]-std[0:99,24,1,p],reverse(avg[0:99,24,1,p]+std[0:99,24,1,p])],color=71
+  oplot,taus,slopes[*,24,1,p],color=70,linestyle=2,thick=7
+
+;  polyfill,[tau[0:99],reverse(tau[0:99])],[avg[0:99,34,0,p]-std[0:99,34,0,p],reverse(avg[0:99,34,0,p]+std[0:99,34,0,p])],color=251
+  oplot,taus,slopes[*,34,0,p],color=250,thick=7
+;  polyfill,[tau[0:99],reverse(tau[0:99])],[avg[0:99,34,1,p]-std[0:99,34,1,p],reverse(avg[0:99,34,1,p]+std[0:99,34,1,p])],color=251
+  oplot,taus,slopes[*,34,1,p],color=250,linestyle=2,thick=7
+ endfor
+
+ legend,['r!De!N=15 !9m!Xm','r!De!N=25 !9m!Xm','r!De!N=35 !9m!Xm','Liquid','Ice'],textcolors=[0,70,250,0,0],color=[255,255,255,0,0],linestyle=[0,0,0,0,2],pspacing=1.2,box=0,position=[0.8,0.2],/normal,charsize=2.6
+
+ device, /close
+ spawn, 'convert '+fp+'.ps '+fp+'.png'
+
+
+stop
+end

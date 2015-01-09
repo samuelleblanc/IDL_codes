@@ -1,0 +1,198 @@
+; Program to plot multiple cloud spectra
+; Trying to determine the water vapor absorption band width
+
+@legend.pro
+
+pro plot_cloud_rad, datein
+if n_elements(datein) lt 1 then $
+  date='20120926' else $
+  date=datein
+
+dir='C:/Users/Samuel/Research/SSFR3/data/'
+restore, dir+date+'_calibspcs.out'
+
+set_plot, 'win'
+device, decomposed=0
+loadct, 39, /silent
+window, 0
+!x.style=1 & !y.style=1 & !x.margin=[6,6] & !p.multi=0
+
+dist=fltarr(n_elements(tmhrs))
+area=fltarr(n_elements(tmhrs))
+wvs=fltarr(n_elements(tmhrs),2)
+
+distr=dist
+arear=area
+wvsr=wvs
+
+;part of code for oxygen a band
+nt=where(finite(tmhrs) eq 1, n)
+
+nul=min(abs(zenlambda-750.),fiz)
+nul=min(abs(zenlambda-775.),laz)
+nul=min(abs(nadlambda-750.),fin)
+nul=min(abs(nadlambda-775.),lan)
+
+radoxa=fltarr(n) ;oxugen a area
+irroxa=fltarr(n)
+
+
+;loop through all the data points and display the results on the screen
+if 0 then begin
+for i=4000, n_elements(tmhrs)-8000,5 do begin
+  plot, zenlambda, zspectra[*,i],title='Cloud radiance and its derivative  at '+string(tmhrs[i],format='(F6.3)'), $
+   ytitle='Radiance', ystyle=9, xrange=[800,1100]
+  axis, yaxis=1, yrange=[-1.0,1.0], ytitle='Derivative',color=250, /save
+  oplot, [350,1700],[0,0],linestyle=1,color=250
+  oplot, zenlambda, deriv(zspectra[*,i])/max(deriv(zspectra[149:204,i])), color=250
+  oplot, zenlambda, smooth(deriv(zspectra[*,i]),4)/max(deriv(zspectra[149:204,i])),color=70
+ ; oplot, zenlambda, deriv(deriv(zspectra[*,i])),color=150
+  drad=smooth(deriv(zspectra[*,i])/max(deriv(zspectra[149:204,i])),2) 
+ nmins=where(drad[149:169] lt 0.2 and drad[149:169] gt -0.2 and shift(drad[149:169],1) gt -0.2 and shift(drad[149:169],1) lt 0.2)
+ ns=indgen(21)+149
+ nmin=max(nmins)
+ nmin=ns[nmin]
+
+ nmaxs=where(drad[193:204] lt 0.2 and drad[193:204] gt -0.2 and shift(drad[193:204],1) gt -0.2 and shift(drad[193:204],1) lt 0.2)
+ ns=indgen(12)+193
+ nmax=min(nmaxs)
+ nmax=ns[nmax]
+
+ ;overplot the locations of the thickness of the water vapor absorption band
+ oplot, [zenlambda[nmin],zenlambda[nmin]],[-1,1], color=150, linestyle=2
+ oplot, [zenlambda[nmax],zenlambda[nmax]],[-1,1], color=150, linestyle=2
+ wait, 0.01
+ dist[i]=zenlambda[nmax]-zenlambda[nmin]
+ area[i]=int_tabulated(zenlambda[nmin:nmax],interpol(zspectra[[nmin,nmax],i],zenlambda[[nmin,nmax]],zenlambda[nmin:nmax])-$
+	 zspectra[nmin:nmax,i])
+endfor
+endif
+
+
+;determine the water vapor and oxygen-a band properties (integrated area, width) for both radiane and irradiance
+for i=0, n_elements(tmhrs)-1 do begin
+  drad=smooth(deriv(zspectra[*,i])/max(deriv(zspectra[149:204,i])),2)  
+  dirr=smooth(deriv(nspectra[*,i])/max(deriv(nspectra[149:204,i])),2)
+ nmir=where(dirr[149:169] lt 0.2 and dirr[149:169] gt -0.2 and shift(dirr[149:169],1) gt -0.2 and shift(dirr[149:169],1) lt 0.2)
+ nmins=where(drad[149:169] lt 0.2 and drad[149:169] gt -0.2 and shift(drad[149:169],1) gt -0.2 and shift(drad[149:169],1) lt 0.2)
+  ns=indgen(21)+149 
+  nmin=max(nmins) 
+  nmin=ns[nmin] 
+  nminr=max(nmir)
+  nminr=ns[nminr]
+       
+ nmaxs=where(drad[193:204] lt 0.2 and drad[193:204] gt -0.2 and shift(drad[193:204],1) gt -0.2 and shift(drad[193:204],1) lt 0.2)
+ nmar=where(dirr[193:204] lt 0.2 and dirr[193:204] gt -0.2 and shift(dirr[193:204],1) gt -0.2 and shift(dirr[193:204],1) lt 0.2)
+
+ ns=indgen(12)+193 
+ nmaxr=min(nmar)
+ nmax=min(nmaxs) 
+  nmax=ns[nmax] 
+ nmaxr=ns[nmaxr]
+   
+  distr[i]=nadlambda[nmaxr]-nadlambda[nminr]
+  arear[i]=int_tabulated(nadlambda[nminr:nmaxr],interpol(nspectra[[nminr,nmaxr],i],nadlambda[[nminr,nmaxr]],$
+	  nadlambda[nminr:nmaxr])-nspectra[nminr:nmaxr,i])
+  wvsr[i,0]=nadlambda[nminr]
+  wvsr[i,1]=nadlambda[nmaxr]
+
+  dist[i]=zenlambda[nmax]-zenlambda[nmin] 
+  area[i]=int_tabulated(zenlambda[nmin:nmax],interpol(zspectra[[nmin,nmax],i],zenlambda[[nmin,nmax]],zenlambda[nmin:nmax])-$
+   zspectra[nmin:nmax,i])
+  wvs[i,0]=zenlambda[nmin]
+  wvs[i,1]=zenlambda[nmax]
+
+   oxar=-zspectra[fiz:laz,i]+interpol(zspectra[[fiz,laz],i],zenlambda[[fiz,laz]],zenlambda[fiz:Laz])
+   oxai=-nspectra[fin:lan,i]+interpol(nspectra[[fin,lan],i],nadlambda[[fin,lan]],nadlambda[fin:Lan])
+
+   radoxa[i]=int_tabulated(zenlambda[fin:lan],oxar)
+   irroxa[i]=int_tabulated(nadlambda[fin:lan],oxai)
+
+endfor
+
+window, 1, title='Water vapor distance'
+plot, tmhrs,dist, title='Water vapor distance', xtitle='UTC (h)', ytitle='Distance (nm)',psym=3
+window, 2, title='Water vapor Area'
+plot, tmhrs, area, title='Water vapor area', xtitle='UTC (h)', ytitle='Area',psym=3
+window, 3, title='Water vapor and oxygen a'
+plot, area, radoxa, xtitle='Water vapor area',ytitle='Oxygen-a band area',psym=3
+
+
+; now do the plot on a ps
+if 1 then begin ; pot an example spectra
+; now do the plot on a ps 
+print, 'making plot :'+dir+date+'_water_band.ps' 
+set_plot, 'ps' 
+ loadct, 39, /silent 
+ device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8., filename=dir+date+'_water_band.ps'
+ device, xsize=20, ysize=20 
+  !p.font=1 & !p.thick=5 & !p.charsize=2.0 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8 
+  !p.multi=0 & !x.margin=[7,7] 
+  
+  plot, zenlambda, zspectra[*,10000],title='Cloud radiance and its derivative  at '+string(tmhrs[10000],format='(F6.3)'), $
+	     ytitle='Radiance (W/m!U2!N nm sr)',xtitle='Wavelength (nm)', ystyle=9, xrange=[800,1100]
+  axis, yaxis=1, yrange=[-1.0,1.0], ytitle='normalized derivative',color=250, /save
+  oplot, [800,1100],[0,0],linestyle=1,color=250
+  oplot, zenlambda, smooth(deriv(zspectra[*,10000])/max(deriv(zspectra[149:204,10000])),2), color=250
+
+ ;overplot the locations of the thickness of the water vapor absorption band
+  oplot, [wvs[10000,0],wvs[10000,0]],[-1,1], color=150, linestyle=2
+  oplot, [wvs[10000,1],wvs[10000,1]],[-1,1], color=150, linestyle=2
+
+legend,['Radiance','Derivative','Water vapor bounds'],textcolors=[0,250,150],box=0,/right
+
+ device, /close
+ spawn, 'convert '+dir+date+'_water_band.ps '+dir+date+'_water_band.png'
+
+endif
+
+
+;load the GOES derivated values of water vapor
+restore, dir+date+'_wv.out'
+
+
+print, 'making plot :'+dir+date+'_water_oxy_rad.ps'
+set_plot, 'ps'
+ loadct, 39, /silent
+  device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8., filename=dir+date+'_water_oxy_rad.ps'
+   device, xsize=15, ysize=40
+   !p.font=1 & !p.thick=5 & !p.charsize=2.0 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8
+   !p.multi=[0,1,3] & !x.margin=[7,2]
+
+   plot, tmhrs,dist, title='Water vapor absorption band width', xtitle='UTC (h)',ytitle='Width (nm)', psym=3
+   oplot, utc, wv*max(dist,/nan)/300., color=250, psym=2
+   legend, ['Band width','GOES water vapor'],textcolors=[0,250],box=0
+  
+   plot, tmhrs,area, title='Water vapor absorption band integrated area', xtitle='UTC (h)', ytitle='Area (W/m!U2!N sr)', psym=3
+   oplot, utc, wv*max(area,/nan)/300., color=250, psym=2
+   legend, ['Band width','GOES water vapor'],textcolors=[0,250],box=0
+   
+   plot, area, radoxa, title='Correspondance between Oxygen-a band and Water vapor absorption band',$
+	   xtitle='Water vapor band integrated area (W/m!U2!N sr)', ytitle='Oxygen-a band integrated area (W/m!U2!N sr)',$
+	   psym=3
+
+device, /close
+spawn, 'convert '+dir+date+'_water_oxy_rad.ps '+dir+date+'_water_oxy_rad.png'
+
+
+set_plot, 'ps'
+print, 'making plot :'+dir+date+'_water_oxy_irr.ps'
+ loadct, 39, /silent
+ device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8., filename=dir+date+'_water_oxy_irr.ps'
+ device, xsize=15, ysize=40
+ !p.font=1 & !p.thick=5 & !p.charsize=2.0 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8
+ !p.multi=[0,1,3] & !x.margin=[7,2]
+	     
+  plot, tmhrs,distr, title='Water vapor absorption band width', xtitle='UTC (h)',ytitle='Width (nm)', psym=3
+  plot, tmhrs,arear, title='Water vapor absorption band integrated area', xtitle='UTC (h)', ytitle='Area (W/m!U2!N)', psym=3
+  plot, arear, irroxa, title='Correspondance between Oxygen-a band and Water vapor absorption band',$
+        xtitle='Water vapor band integrated area (W/m!U2!N)', ytitle='Oxygen-a band integrated area (W/m!U2!N)',$
+        psym=3 
+					    
+ device, /close 
+spawn, 'convert '+dir+date+'_water_oxy_irr.ps '+dir+date+'_water_oxy_irr.png'
+
+
+save, dist, area, wvs, tmhrs, radoxa,irroxa,distr, arear, wvsr, filename=dir+date+'_wv.out'
+stop
+end

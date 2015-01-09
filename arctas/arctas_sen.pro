@@ -1,0 +1,100 @@
+@errploty.pro
+pro arctas_sen
+close, 98
+
+f=fltarr(6,20)
+k=file_search('\\lasp-smb\leblanc\libradtran\output\aero\tau_20080709_ssact*.dat')
+k=file_search('/home/leblanc/libradtran/output/aero/tau_20080709_ssact*.dat')
+k=k[sort(k)]
+
+ta=[0.1246000,0.0950000, 0.0820000, 0.0767000,0.0446000,0.0070000,0.0030000]
+
+; read in the errors
+openr, 96, '/home/leblanc/arctas/nasa/rtm_error.out'
+line=' '
+error=fltarr(6,13)
+readf,96,line
+readf, 96, error
+close,/all
+;wvl,ssa,asy,asy2,albedo - errors
+error=error*0.01
+
+
+tau_e=fltarr(n_elements(k))
+for t=0,n_elements(k)-1 do begin
+wvl=strmid(k[t],6,3,/reverse_offset)
+print, wvl
+openr,98,k[t]
+readf, 98, f
+close, 98
+
+for i=0,5 do begin
+f[i,*]=f[i,sort(f[1,*])]
+endfor
+ta=f[1,where(f[0,*] eq 1.0)]
+ta=ta[0]
+dir='\\lasp-smb\leblanc\arctas\nasa\20080709\'
+dir='/home/leblanc/arctas/nasa/20080709/'
+;printf, 94, tau_mod, tau_now, ssa, asy, asy2
+
+set_plot, 'ps'
+ loadct, 39, /silent
+ device, /encapsulated
+ device, /tt_font, set_font='Helvetica Bold'
+ device, filename=dir+'sensitivity_ssact_asy_tau_wvl'+wvl+'.ps'
+ device,/color,bits_per_pixel=8.
+ device, xsize=60, ysize=30
+      !p.font=1
+      !p.thick=3
+      !p.charsize=2.5
+      !x.style=0
+      !y.style=1 
+      !z.style=1
+      !y.thick=1.8
+      !x.thick=1.8
+      !p.multi=[0,2,1]
+      !y.omargin=[1,3]
+      !x.charsize=1.5
+      !y.charsize=1.5
+      g_hat='!8!sg!r!u^!n!X'
+      tau_s='!Mt!X'
+      plot, f[1,*], f[3,*], title='Asymmetry parameter sensitivity to '+tau_s, xtitle=tau_s, ytitle='!8g!X', yrange=[0,1],thick=8
+      oplot, f[1,*], f[4,*], color=70,thick=8
+      plots, [ta,ta],[0,1], linestyle=2,thick=8
+      errplot,f[1,*],f[3,*]-f[3,*]*error[2,t],f[3,*]+f[3,*]*error[2,t]
+      errplot,f[1,*],f[4,*]-f[4,*]*error[3,t],f[4,*]+f[4,*]*error[3,t],color=70
+      legend,[g_hat,'!8g!X'],textcolors=[0,70]
+      plot, f[1,*],abs(f[3,*]-f[4,*]), title='Asymmetry parameter difference per '+tau_s, xtitle=tau_s, ytitle='|!8g!X-'+g_hat+'|',ystyle=0,thick=8
+      errplot,f[1,*] ,abs(f[3,*]-f[4,*])-sqrt((f[3,*]*error[2,t])^2+(f[4,*]*error[3,t])^2),abs(f[3,*]-f[4,*])+sqrt((f[3,*]*error[2,t])^2+(f[4,*]*error[3,t])^2)
+      plots, [ta,ta],[0,max(abs(f[3,*]-f[4,*]))], linestyle=2,thick=8
+      plots, [f[1,6],f[1,10]],[0,0],color=250,thick=8
+
+      ;plot, f[1,*],f[2,*], title='SSA per tau variations', xtitle='tau', ytitle='SSA'
+      ;plots, [ta,ta],[min(f[2,*]),max(f[2,*])], linestyle=2
+      legend,['|!8g!X-'+g_hat+'|','True '+tau_s,'Possible '+tau_s+' Range'],linestyle=[0,2,0],color=[0,0,250],pspacing=1.5,thick=8
+      xyouts, 0.5,0.95, alignment=0.5, /normal, charsize=3.5, 'Optical depth uncertainty propagation at '+wvl+' nm'
+ device, /close
+ 
+if (0) then begin
+ ;to find the error on tau
+ er_t=where(abs(f[3,*]-f[4,*])-sqrt((f[3,*]*error[2,t])^2+(f[4,*]*error[3,t])^2) lt 0.0, ct)
+ if ct gt 0 then begin
+   ;test=where(shift(er_t,1) eq er_t+1)
+   print, er_t
+   stop
+   er_t=er_t[test]
+   er_tl=min(f[1,er_t])
+   er_th=max(f[1,er_t])
+   tau_e[t]=((er_th-er_tl)/2.)/ta *100.
+ endif else tau_e[t]=!values.f_nan
+endif
+
+ spawn, 'convert "'+dir+'sensitivity_ssact_asy_tau_wvl'+wvl+'ps" "'+dir+'sensitivity_ssact_asy_tau_wvl'+wvl+'.png"'
+;spawn, 'rm "'+dir+'s.ps"
+ endfor
+if (0) then begin 
+openw, 95, '/home/leblanc/arctas/nasa/rtm_tau_e.out'
+printf, 95, tau_e, format='(12F)'
+close,/all
+endif
+ end

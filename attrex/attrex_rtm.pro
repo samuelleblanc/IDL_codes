@@ -1,0 +1,524 @@
+;+
+; NAME:
+;   attrex_rtm
+;
+; PURPOSE:
+;   to do the aerosol retrieval on select days from attrex
+;
+; CATEGORY:
+;   ATTREX, Aerosol retrieval for clouds
+;
+; CALLING SEQUENCE:
+;   attrex_rtm
+;
+; OUTPUT:
+;   plots
+;   retrieved values in a text file
+;
+; KEYWORDS:
+;   - none
+;
+; DEPENDENCIES:
+;   - read_cpl.pro ; for reading the cpl data
+;   - libradtran_reader.pro ; for reading the output files from libradtran
+;   - legend.pro
+;   - write_input_cpl.pro ; for making the input data from cpl
+;   - zensun.pro ; for the julian_day subroutine
+;
+; NEEDED FILES:
+;   - SP.out files
+;   - CPL lidar text file
+;
+; EXAMPLE:
+;
+;
+; MODIFICATION HISTORY:
+; Written:  Samuel LeBlanc, LASP CU Boulder, June 4th , 2012
+; Modified: by Samuel LeBlanc, multiple times
+;           - changed code to make more plots, data analysis, and modelling  
+;
+;---------------------------------------------------------------------------
+
+@/home/leblanc/libradtran/pro/libradtran_reader.pro
+@read_cpl.pro
+@write_input_cpl.pro
+@zensun.pro
+
+pro attrex_rtm
+
+dir='/media/disk-1/Documents and Settings/Samuel/My Documents/Research/attrex/'
+spect_file=dir+'gh/20111105/20111105_SP_attcorr.out' ;'/data/seven/schmidt/attrex/gh/20111105/20111105_SP_attcorr.out'
+cpl_file=dir+'CPL/20111105/cipbl_11202b_05nov11.txt' ;'/home/leblanc/ATTREX/gh/20111105/cipbl_11202b_05nov11.txt'
+date='20111105'
+
+
+read_cpl, cpl_file, utc_cpl, h_sat, h_grd, nlay, type_code, lay_topht, lay_botht, tau, tau_e
+restore, spect_file
+zspectra=zspectra_attcorr
+fl=where(utc gt 24.5 and utc lt 26.0 and sza lt 89.)
+flc=where(utc_cpl gt 24.5 and utc_cpl lt 26.0)
+
+;set up the plotting
+set_plot,'x'
+loadct, 39,/silent
+device,decomposed=0
+!p.multi=[0,2,2]
+!y.style=1
+!x.style=1
+if 0 then begin
+  window,0,retain=2,xsize=900,ysize=900
+  plot, utc[fl],lat[fl],title='Latitude',xtitle='UTC',ytitle='Latitude'
+     p1 = !P & x1 = !X & y1 = !Y
+  plot, lon[fl],lat[fl],title='map',ytitle='Latitude',xtitle='Longitude'
+     p2 = !P & x2 = !X & y2 = !Y
+  for i=0, n_elements(fl)-1,100 do xyouts,lon[fl[i:i+1]],lat[fl[i:i+1]],string(utc[fl[i]],format='(F6.3)'),color=120
+  plot, utc[fl],alt[fl],title='Altitude',ytitle='Altitude (m)',xtitle='UTC'
+     p3 = !P & x3 = !X & y3 = !Y
+  plot, lon[fl],utc[fl],title='Longitude',ytitle='UTC',xtitle='Longitude'
+     p4 = !P & x4 = !X & y4 = !Y
+endif   
+
+go=1
+if 0 then begin
+  if (0) then begin
+    while go do begin
+      ;now get the cursor positions from the map
+      !P = p2 & !X = x2 & !Y = y2
+      print, 'Click to get the desired point'
+      cursor,x,y,/data
+      nul=min(abs((x-lon[fl])^2.0+(y-lat[fl])^2.0),mm)
+      print, 'Longitude:',lon[fl[mm]]
+      ;nul=min(abs(y-lat[fl]),mm)
+      print, 'Latitude:',lat[fl[mm]]
+      print, 'Altitude:',alt[fl[mm]]
+      print, 'UTC:',utc[fl[mm]],' SZA:',sza[fl[mm]]
+      nul=min(abs(utc[fl[mm]]-utc_cpl),nn)
+      print, 'Tau:',tau[nn,*]
+      print, 'Layer top:',lay_topht[nn],' Layer bottom:',lay_botht[nn]
+
+      window,1,retain=2,xsize=500,ysize=500
+      !p.multi=0
+      plot, zenlambda,zspectra[*,fl[mm]],title='Spectra',xtitle='Wavelenght',ytitle='Irradiance'
+      oplot,nadlambda,nspectra[*,fl[mm]],color=250
+      legend,['Zenith','Nadir'],textcolors=[0,250],box=0,/right
+      ;print, 'Keep selecting points? (1=yes, 0=no)'
+      ;read,go
+      wset,0
+      !p.multi=[0,2,2]
+    end
+  endif else begin
+    window, 1, xsize=500,ysize=500, retain=0
+    !p.multi=0
+    fli=where(utc gt 24.88 and utc lt 25.3)
+    nul=min(abs(zenlambda-750.),fiz)
+    nul=min(abs(zenlambda-775.),laz)
+    nul=min(abs(nadlambda-750.),fin)
+    nul=min(abs(nadlambda-775.),lan)
+    for i=0, n_elements(fli)-1 do begin
+      ;wset,1
+      ;!p.multi=0
+      nul=min(abs(utc[fli[i]]-utc_cpl),nn)
+      plot, zenlambda[fiz:laz],nspectra[fin:lan,fli[i]]/zspectra[fiz:laz,fli[i]],title='UTC:'+string(utc[fli[i]],format='(F6.3)')+$
+       ' ALT:'+string(alt[fli[i]],format='(F6.0)')+' SZA:'+string(sza[fli[i]],format='(F4.1)')+' Tau:'+string(tau[nn,0],format='(F4.2)'),$
+       xtitle='Wavelength',ytitle='Albedo',yrange=[0,1.0]
+      ;oplot,nadlambda[fin:lan],nspectra[fin:lan,fli[i]],color=250
+
+      ;legend,['Zenith','Nadir'],textcolors=[0,250],box=0,/right
+      wait,0.1
+    endfor
+  endelse
+endif
+
+
+; Interpolate the nadir spectra to the zenith wavelength for calculating the albedo
+nspectra_z=zspectra
+sza_ref=78.954563
+for i=0L, n_elements(utc)-1L do begin
+  nspectra_z[*,i]=interpol(nspectra[*,i]*cos(sza_ref*!dtor)/cos(sza[i]*!dtor),nadlambda,zenlambda)
+  zspectra[*,i]=zspectra[*,i]*cos(sza_ref*!dtor)/cos(sza[i]*!dtor)
+endfor
+albedo=nspectra_z/zspectra
+
+
+; now set up to plot an example of the oxygen a band, and calculate the area
+nul=min(abs(zenlambda-750.),fiz)
+nul=min(abs(zenlambda-775.),laz)
+;nul=min(abs(nadlambda-750.),fin)
+;nul=min(abs(nadlambda-775.),lan)
+fli=where(utc gt 24.88 and utc lt 25.3)
+
+alb_int=albedo[fiz:laz,*]
+area=utc*!values.f_nan
+
+for i=0L, n_elements(utc)-1L do begin
+  alb_int[*,i]=interpol([albedo[fiz,i],albedo[laz,i]],[zenlambda[fiz],zenlambda[laz]],zenlambda[fiz:laz])
+  area[i]=total(alb_int[*,i]-albedo[fiz:laz,i],/nan)
+endfor
+;set_plot, 'x'
+;window, 2, retain=2,xsize=500,ysize=500
+
+set_plot, 'ps'
+ loadct, 39, /silent
+ device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8.,$
+  filename=dir+'gh/20111105/oxygen_a.ps'
+ device, xsize=20, ysize=20
+ !p.font=1 & !p.thick=5 & !p.charsize=2.0 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8 & !x.margin=[7,2]
+
+
+loadct,39
+!p.multi=0
+;device, decomposed=0
+u=200
+plot, zenlambda[fiz-4:laz+4],albedo[fiz-4:laz+4,fli[u]],title='Oxygen-a absorption band',xtitle='Wavelength (nm)',ytitle='Albedo',yrange=[0,1],/nodata
+
+tvlct,200,200,200,200
+polyfill,[zenlambda[fiz:laz],reverse(zenlambda[fiz:laz])],[alb_int[*,fli[u]],reverse(albedo[fiz:laz,fli[u]])],color=200
+oplot, zenlambda[fiz:laz],alb_int[*,fli[u]]
+
+oplot, zenlambda[fiz-4:laz+4],albedo[fiz-4:laz+4,fli[u]],color=250
+
+legend, ['Measured Oxygen-a albedo','Integrated area'],textcolors=[250,200],box=0,/right
+
+device, /close
+spawn, 'convert "'+dir+'gh/20111105/oxygen_a.ps" "'+dir+'gh/20111105/oxygen_a.png"'
+
+
+
+;get average optical depth, and top and bottom of cloud from CPL data
+
+cod=fltarr(3)
+flc=where(utc_cpl gt 24.88 and utc_cpl lt 25.0)
+nan=where((tau[*,0] eq -8.8 or tau[*,0] eq -9.9) or (tau[*,1] eq -8.8 or tau[*,1] eq -9.9) or (tau[*,2] eq -8.8 or tau[*,2] eq -9.9) or $
+ lay_topht eq -999. or lay_botht lt 15000.,n)
+tau[nan,0]=!values.f_nan
+tau[nan,1]=!values.f_nan
+tau[nan,2]=!values.f_nan
+for i=0,2 do cod[i]=mean(tau[flc,i],/nan)
+if n gt 0 then lay_topht[nan]=!values.f_nan
+if n gt 0 then lay_botht[nan]=!values.f_nan
+top=mean(lay_topht[flc],/nan)
+bot=mean(lay_botht[flc],/nan)
+print, 'tau, top, bot'
+print, cod, top, bot
+
+set_plot, 'ps'
+ loadct, 39, /silent
+ device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8.,$
+  filename=dir+'gh/20111105/altitude_oxygen_a.ps'
+ device, xsize=20, ysize=20
+ !p.font=1 & !p.thick=5 & !p.charsize=2.0 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8 & !x.margin=[7,7]
+
+;set_plot, 'x'
+;!x.margin=[7,7]
+;device, decomposed=0
+;window,3,xsize=500,ysize=500
+tvlct,200,200,200,200
+plot,  utc[fli],alt[fli]/1000., ystyle=9, ytitle='Altitude (km)',xtitle='UTC (h)',/nodata, title='Thin cirrus'
+polyfill, [utc[fli[0]],utc[fli[n_elements(fli)-1]],utc[fli[n_elements(fli)-1]],utc[fli[0]]],[top,top,bot,bot]/1000.,color=200
+oplot, utc[fli],alt[fli]/1000.
+
+axis,yaxis=1,yrange=[0.6,1.7],ytitle='Oxygen-a band area',/save
+
+fla=where(area[fli] gt 0.8 and area[fli] lt 0.87)
+fla=fli[fla]
+
+tvlct,250,200,200,251
+polyfill, [utc[fli[0]],utc[fli[n_elements(fli)-1]],utc[fli[n_elements(fli)-1]],utc[fli[0]]],[0.8,0.8,0.87,0.87],color=251
+oplot, utc[fli],area[fli],color=250
+
+legend,['Altitude','Cloud','Oxygen-a band area','Limits of Oxygen-a band'],box=0,/right,textcolors=[0,200,250,251]
+device, /close
+spawn, 'convert "'+dir+'gh/20111105/altitude_oxygen_a.ps" "'+dir+'gh/20111105/altitude_oxygen_a.png"'
+
+;pressure at top is :82.1670 mb, at bottom: 81.5019 mb
+
+;plot the net shortwave and longwave irradiance
+bb1=[350.,2100.]
+bb1z=where(zenlambda ge bb1[0] and zenlambda le bb1[1]) & bb1n=where(nadlambda ge bb1[0] and nadlambda le bb1[1])
+dz1=0.5*(zenlambda[bb1z+1]-zenlambda[bb1z-1])           & dn1=0.5*(nadlambda[bb1n+1]-nadlambda[bb1n-1])
+bz1=fltarr(n_elements(utc)) & bn1=fltarr(n_elements(utc))
+for i=0L,n_elements(utc)-1L do begin
+  bz1[i]=total(zspectra[bb1z,i]*dz1)
+  bn1[i]=total(nspectra[bb1n,i]*dn1)
+endfor
+
+;get the pressures
+alt1=alt
+utc1=utc
+restore, dir+'gh/20111105/20111105_met.out'
+alt=alt1
+utc=utc1
+nul=min(abs(alt[fli]-top),talt)
+nul=min(abs(alt[fli[0:1250]]-bot),balt)
+print, 'Pressure, top and bottom'
+print, pre[fli[talt]],pre[fli[balt]]
+
+;figure out the values that are valid and on top, and bottom
+flatop=where(area[fli] gt 0.8 and area[fli] lt 0.9 and alt[fli] gt alt[fli[talt]])
+flatop=fli[flatop]
+
+flabot=where(area[fli] gt 0.8 and area[fli] lt 0.9 and alt[fli] lt alt[fli[balt]])
+flabot=fli[flabot]
+
+;set_plot, 'x'
+;device, decomposed=0
+;!p.multi=[0,1,2]
+;window, 4, xsize=500,ysize=900, retain=2
+set_plot, 'ps'
+ loadct, 39, /silent
+tvlct,200,200,200,200
+ device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8.,$
+  filename=dir+'gh/20111105/net_irradiance.ps'
+ device, xsize=20, ysize=40
+ !p.font=1 & !p.thick=5 & !p.charsize=2.0 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8 & !x.margin=[7,7]
+!p.multi=[0,1,2]
+
+tvlct,100,35,35,249
+tvlct,35,35,100,79
+
+plot, utc[fli],bz1[fli]-bn1[fli],title='Integrated shortwave irradiance',ytitle='Irradiance (W/m!U2!N)',xtitle='UTC (h)',yrange=[0, 350.],/nodata
+oplot, utc[fli],bz1[fli]-bn1[fli],color=200,psym=1
+oplot, utc[fla],bz1[fla]-bn1[fla],psym=1
+oplot, utc[fli],bz1[fli],color=250,psym=1
+oplot, utc[fli],bn1[fli],color=80,psym=1
+
+oplot, utc[flatop],bz1[flatop]-bn1[flatop],psym=1,color=249
+oplot, utc[flabot],bz1[flabot]-bn1[flabot],psym=1,color=79
+btop=mean(bz1[flatop]-bn1[flatop],/nan)
+bbot=mean(bz1[flabot]-bn1[flabot],/nan)
+legend,['Net irradiance','Zenith','Nadir','Top','Bottom'],textcolors=[0,250,80,249,79],box=0,/right
+legend,[string(btop,format='(F9.4)'),string(bbot,format='(F9.4)')],textcolors=[249,79],box=0
+restore, dir+'gh/20111105/20111105_add.out'
+
+plot, utc[fli],cg4dn[fli]-cg4up[fli], title='CG4 Net Longwave irradiance',ytitle='Irradiance (W/m!U2!N)',xtitle='UTC (h)',/nodata
+oplot, utc[fli],cg4dn[fli]-cg4up[fli],color=200,psym=1
+oplot, utc[fla],cg4dn[fla]-cg4up[fla],psym=1
+
+oplot, utc[flatop],cg4dn[flatop]-cg4up[flatop],psym=1,color=249
+oplot, utc[flabot],cg4dn[flabot]-cg4up[flabot],psym=1,color=79
+ctop=mean(cg4dn[flatop]-cg4up[flatop],/nan)
+cbot=mean(cg4dn[flabot]-cg4up[flabot],/nan)
+legend, ['Valid data','Discarded data','Top','Bottom'],textcolors=[0,200,249,79],box=0,/right
+legend, [string(ctop,format='(F9.4)'),string(cbot,format='(F9.4)')],textcolors=[249,79],box=0
+device, /close
+spawn, 'convert "'+dir+'gh/20111105/net_irradiance.ps" "'+dir+'gh/20111105/net_irradiance.png"'
+
+
+
+stop
+
+topnsp=nspectra[*,0]*!values.f_nan
+topzsp=topnsp & botnsp=topnsp & botzsp=topzsp
+
+fltop=where(utc gt 24.97 and utc lt 25.2 and alt gt top,n)
+if n gt 0 then begin
+  topsza=mean(sza[fltop],/nan)
+  for i=0,n_elements(nadlambda)-1 do begin
+    topnsp[i]=mean(nspectra[i,fltop]*cos(topsza*!dtor)/cos(sza[fltop]*!dtor),/nan)
+    topzsp[i]=mean(zspectra[i,fltop]*cos(topsza*!dtor)/cos(sza[fltop]*!dtor),/nan)
+  endfor
+endif else message, 'no points above the top of the cloud'
+
+flbot=where(utc gt 24.97 and utc lt 25.3 and alt lt bot,n)
+if n gt 0 then begin
+  botsza=mean(sza[flbot],/nan)
+  for i=0,n_elements(nadlambda)-1 do begin
+    botnsp[i]=mean(nspectra[i,flbot]*cos(botsza*!dtor)/cos(sza[flbot]*!dtor),/nan)
+    botzsp[i]=mean(zspectra[i,flbot]*cos(botsza*!dtor)/cos(sza[flbot]*!dtor),/nan)
+  endfor  
+endif else message, 'no points above the bottom of the cloud'
+
+sza_avg=(botsza+topsza)/2.
+topzsp=topzsp*cos(sza_avg*!dtor)/cos(topsza*!dtor)
+botzsp=botzsp*cos(sza_avg*!dtor)/cos(botsza*!dtor)
+topnsp=topnsp*cos(sza_avg*!dtor)/cos(topsza*!dtor)
+botnsp=botnsp*cos(sza_avg*!dtor)/cos(botsza*!dtor)
+
+print, 'avg sza, top sza, bot sza'
+print, sza_avg,topsza,botsza
+
+if 0 then begin
+window, 1, xsize=500,ysize=500, retain=0
+!p.multi=0
+for i=0, n_elements(fltop)-1 do begin
+nul=min(abs(utc[fltop[i]]-utc_cpl),nn)
+plot, zenlambda,zspectra[*,fltop[i]]*cos(sza_avg*!dtor)/cos(sza[fltop[i]]*!dtor),title='UTC:'+string(utc[fltop[i]],format='(F6.3)')+$
+ ' ALT:'+string(alt[fltop[i]],format='(F6.0)')+' SZA:'+string(sza[fltop[i]],format='(F4.1)')+' Tau:'+string(tau[nn,0],format='(F4.2)'),$
+ xtitle='Wavelength',ytitle='Irradiance',yrange=[0,0.38]
+oplot,nadlambda,nspectra[*,fltop[i]],color=250
+wait,0.08
+endfor
+
+for i=0, n_elements(flbot)-1 do begin
+nul=min(abs(utc[flbot[i]]-utc_cpl),nn)
+plot, zenlambda,zspectra[*,flbot[i]]*cos(sza_avg*!dtor)/cos(sza[flbot[i]]*!dtor),title='UTC:'+string(utc[flbot[i]],format='(F6.3)')+$
+ ' ALT:'+string(alt[flbot[i]],format='(F6.0)')+' SZA:'+string(sza[flbot[i]],format='(F4.1)')+' Tau:'+string(tau[nn,0],format='(F4.2)'),$
+ xtitle='Wavelength',ytitle='Irradiance',yrange=[0,0.38]
+oplot,nadlambda,nspectra[*,flbot[i]],color=250
+wait,0.08
+endfor
+endif
+
+;window, 2, xsize=500,ysize=900, retain=2
+topnsp=interpol(topnsp,nadlambda,zenlambda)
+botnsp=interpol(botnsp,nadlambda,zenlambda)
+
+if 0 then begin
+set_plot, 'ps'
+ loadct, 39, /silent
+ device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8.,$
+  filename='/home/leblanc/ATTREX/gh/20111105/spectra_rtm.ps'
+ device, xsize=20, ysize=40
+ !p.font=1 & !p.thick=5 & !p.charsize=2.0 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8 & !x.margin=[7,2]
+ !p.multi=[0,1,2]
+plot, zenlambda,topzsp,title='Solar irradiance above and below layer',xtitle='Wavelength (nm)',ytitle='Irradiance (W/m!U2!N nm)',yrange=[0,0.38]
+oplot,zenlambda,botzsp,linestyle=2
+oplot,nadlambda,topnsp,color=250
+oplot,nadlambda,botnsp,color=250,linestyle=2
+
+legend,['Zenith','Nadir'],textcolors=[0,250],box=0,/right
+legend,['Above','Below'],linestyle=[0,2],box=0,/right,pspacing=1.5,position=[0.92,0.91],/normal
+
+;topnsp=interpol(topnsp,nadlambda,zenlambda)
+;botnsp=interpol(botnsp,nadlambda,zenlambda)
+
+plot, zenlambda,topzsp-topnsp, title='Net and absorbed irradiance',xtitle='Wavelength (nm)',ytitle='Irradiance (W/m!U2!N nm)',yrange=[0,0.2]
+oplot,zenlambda,botzsp-botnsp, color=250
+oplot,zenlambda,-(topzsp-topnsp)+(botzsp-botnsp),color=80
+legend,['Net irradiance above','Net irradiance below','Layer absorption'],textcolors=[0,250,80],box=0,/right
+
+
+device,/close
+spawn,'convert /home/leblanc/ATTREX/gh/20111105/spectra_rtm.ps /home/leblanc/ATTREX/gh/20111105/spectra_rtm.png'
+;rgb=tvrd(true=1)
+;write_png,'/home/leblanc/ATTREX/gh/20111105/spectra_rtm.png',rgb
+endif
+;tau_file='/home/leblanc/libradtran/input/aero/aero_tau.level'
+
+wl=[355.,532.,1064.]
+ssa_wvl=interpol([0.975,0.978,0.493,0.43,0.42],[wl,1500.,2100.],zenlambda,/spline) ;extra values of ssa added to make nice smooth ssa curve
+asy=zenlambda*0.0 + 0.6
+albedo_wvl=botnsp/botzsp
+n=where(albedo_wvl gt 1.0, count)
+if count ge 1 then albedo_wvl[n]=1.0
+
+botn=zenlambda*!values.f_nan 
+botz=botn & topn=botn & topz=botz
+
+cod=cod*2.
+
+a1=alog(cod[0]/cod[1])/alog(wl[0]/wl[1])
+a2=alog(cod[1]/cod[2])/alog(wl[1]/wl[2])
+
+nul=min(abs(zenlambda-wl[1]),mid)
+tau=zenlambda
+tau[0:mid]=cod[1]*(zenlambda[0:mid]/wl[1])^a1
+tau[mid+1:*]=cod[2]*(zenlambda[mid+1:*]/wl[2])^a2
+
+zout=[mean(alt[flbot],/nan),mean(alt[fltop],/nan)]/1000.
+atm_file='/home/leblanc/libradtran/input/aero/atmos_aero_20111105_at.dat'
+doy=julian_day(fix(strmid(date,0,4)),fix(strmid(date,4,2)),fix(strmid(date,6,2)))
+input_file='/home/leblanc/libradtran/input/aero/aero_20111105.inp'
+output_file='/home/leblanc/libradtran/output/aero/aero_20111105.out'
+asy=0.6
+stop
+for i=0, n_elements(zenlambda)-1 do begin
+
+;print, 'Current tau, ssa, wvl, albedo'
+;print, tau[i],ssa_wvl[i],zenlambda[i],albedo_wvl[i]
+;print, 'Please set new tau, ssa, wvl, albedo'
+;read, a,b,c,d
+;tau[i]=a & ssa_wvl[i]=b & zenlambda[i]=c & albedo_wvl[i]=d
+;print, 'Stop after this one? (yes=1 no=0)'
+;read, f
+write_input_cpl,tau[i],top/1000.,bot/1000.,0.0,tau_out=tau_file,tau_approx=0,/quiet
+ssa=ssa_wvl[i]
+wvl=[zenlambda[i],zenlambda[i]]
+albedo= albedo_wvl[i];0.91 ;0.73 , 0.65
+
+write_input_file, doy, sza_avg, tau_file, atm_file, input_file, 0., asy, ssa, wvl, zout, albedo, /radiance, tau_scale=1., /slit,/quiet
+spawn, '/home/leblanc/libradtran/libRadtran-1.6-beta/bin/uvspec < '+input_file+' > '+output_file,message
+print, message
+;if message ne '' then message, message
+;output=libradtran_reader(file = output_file,/radiance,zout = zout,/quiet)
+botn[i]=output.dif_up[0]
+botz[i]=output.dir_dn[0]+output.dif_dn[0]
+topz[i]=output.dir_dn[1]+output.dif_dn[1]
+topn[i]=output.dif_up[1]
+;if f then i=n_elements(zenlambda)-1
+print, i
+endfor
+
+set_plot, 'x'
+window, 4, xsize=500,ysize=900, retain=2
+!p.multi=[0,1,3] & !y.style=1
+plot, zenlambda, ssa_wvl, title='Single Scattering albedo'
+plot, zenlambda, tau, title='Optical depth'
+plot, zenlambda, -(topzsp-topnsp)+(botzsp-botnsp),title='Absorption',xtitle='Wavelength (nm)',ytitle='Irradiance (W/m!U2!N nm)'
+oplot,zenlambda, (botz-botn)-(topz-topn), color=250
+legend, ['Measurement','Model'],textcolors=[255,250],box=0,/right
+
+save, ssa_wvl,tau,zenlambda,topzsp,topnsp,botzsp,botnsp,botz,botn,topz,topn,filename='/home/leblanc/ATTREX/gh/20111105/20111105_model.out'
+
+;print, 'top zenith, top nadir, bot zenith, bot nadir'
+;print, topz,topn,botz,botn
+
+;nul=min(abs(zenlambda-1064.),m)
+;print, topzsp[m],topnsp[m],botzsp[m],botnsp[m]
+;print, 'absorption model, measured'
+;print, +(topz-topn)-(botz-botn),-(topzsp[m]-topnsp[m])+(botzsp[m]-botnsp[m]) 
+stop
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Write input file program                                                    ;;
+;; used to make the input file for uvspec                                      ;;
+;; use radiance keyword to set radiance (zenith pointing)                      ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+pro write_input_file, doy, sza, tau_file, atm_file, input_file, azimuth, asy, ssa, wvl, zout, albedo, radiance=radiance, quiet=quiet, tau_scale=tau_scale, slit=slit
+
+ui=99
+openw,ui,input_file;,/get_lun
+printf,ui,'data_files_path   /home/leblanc/libradtran/libRadtran-1.5-beta/data'
+printf,ui,'solar_file        /home/leblanc/libradtran/libRadtran-1.5-beta/data/solar_flux/kurudz_1.0nm.dat' 
+printf,ui,'atmosphere_file   '+atm_file
+
+;printf,ui,'albedo_library    IGBP    # Spectral albedo library '
+;printf,ui,'surface_type      13      # urban albedo from library'
+if albedo lt 0 then albedo=albedo*(-1.)
+printf,ui,'albedo            '+string(albedo)  ; 
+
+printf,ui,'rte_solver        sdisort'       
+printf,ui,'nstr              20'            
+printf,ui,'correlated_k      SBDART'        ; pseudo-spectral definition of atmospheric absorption
+
+printf,ui,'sza               '+string(sza)    ; solar zenith angle (deg)
+printf,ui,'day_of_year       '+string(doy)    ; day of year for Sun-Earth distance
+
+if keyword_set(radiance) then begin
+  printf,ui,'phi0              '+string(azimuth+180.0); solar azimuth angle (deg)
+  printf,ui,'umu               -1  # -1:downward radiance; 1:upward radiance; 0:sidward radiance' ;for radiances (ship)
+  printf,ui,'phi               270.0   # output azimuth angle (flight-direction: NNW = 350°)' ;for radiances(ship direction)
+endif
+
+printf,ui,'aerosol_default'                   ; initialize aerosol
+printf,ui,'aerosol_tau_file  '+tau_file
+printf,ui,'aerosol_set_ssa   '+string(ssa)  
+printf,ui,'aerosol_set_gg    '+string(asy)      
+if keyword_set(tau_scale) then printf, ui, 'aerosol_scale_tau   '+string(tau_scale)
+
+printf,ui,'wavelength        '+string(wvl[0],format='(I4)')+'  '+string(wvl[1],format='(I4)') ; wavelengths
+printf,ui,'altitude          0.0' ;0.263 # elevation (ASL) of CalTech in km'      
+printf,ui,'zout              '+string(zout, format='('+strtrim(string(n_elements(zout)),2)+'(" ",F8.2))')
+
+if keyword_set(slit) then begin ; if set, use slit function, must change for IngAas
+  if wvl[0] le 940 then printf,ui,'slit_function_file /home/leblanc/libradtran/vis_1nm.dat' else printf,ui,'slit_function_file /home/leblanc/libradtran/nir_1nm.dat'
+endif
+
+printf,ui,'quiet'
+free_lun,ui
+
+if not keyword_set(quiet) then print, 'input file saved to: '+input_file
+
+end

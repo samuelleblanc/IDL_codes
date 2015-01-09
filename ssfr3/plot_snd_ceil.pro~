@@ -1,0 +1,72 @@
+;program to plot the sounding for the day with the cloud bottom height
+;for the three cases
+
+pro plot_snd_ceil
+
+dir='C:\Users\Samuel\Research\SSFR3\'
+d1=read_ascii(dir+'wx\sounding_20120525.dat')
+d2=read_ascii(dir+'wx\sounding_20120806.dat')
+d3=read_ascii(dir+'wx\sounding_20130110.dat')
+
+z1=reform(d1.field01[1,*])/1000.
+t1=reform(d1.field01[2,*])
+td1=reform(d1.field01[3,*])
+
+bot1=0.9+1.68
+top1=3.5
+
+
+z2=reform(d2.field01[1,*])/1000.
+t2=reform(d2.field01[2,*])
+td2=reform(d2.field01[3,*])
+
+bot2=4.5+1.68
+top2=8.0
+
+z3=reform(d3.field01[1,*])/1000.
+t3=reform(d3.field01[2,*])
+td3=reform(d3.field01[3,*])
+
+bot3=7.8+1.68
+top3=11.5
+
+fp=dir+'plots\new\soundings'
+print, 'making plot :'+fp
+set_plot, 'ps'
+ loadct, 39, /silent
+ device, /encapsulated, /tt_font, set_font='Helvetica Bold',/color,bits_per_pixel=8., filename=fp+'.ps'
+ device, xsize=30, ysize=20
+  !p.font=1 & !p.thick=5 & !p.charsize=3.8 & !x.style=1 & !y.style=1 & !z.style=1 & !y.thick=1.8 & !x.thick=1.8
+  !p.multi=[0,3,1] & !x.margin=[6,1] & !y.margin=[4,4]
+  yr=[0,12]
+  xr=[-80,30]
+
+  tvlct,200,200,200,201
+
+  plot, t1,z1,yr=yr,ytitle='Altitude (km ASL)',xtitle='Temperature (!Uo!NC)',xr=xr,title='A - 2012-05-25!CLiquid'
+  oplot,td1,z1,color=201
+  oplot,[0,0],yr,linestyle=1
+  oplot,xr,[bot1,bot1],linestyle=2,color=50
+  xyouts,xr[0],bot1+0.1,'Cloud bottom',color=50,charsize=1.6
+  oplot,xr,[top1,top1],linestyle=2,color=250
+  xyouts,xr[0],top1+0.1,'Cloud top',color=250,charsize=1.6
+
+  plot, t2,z2,yr=yr,ytitle='Altitude (km ASL)',xtitle='Temperature (!Uo!NC)',xr=xr,title='B - 2012-08-06!CMix'
+  oplot,td2,z2,color=201
+  oplot,[0,0],yr,linestyle=1
+  oplot,xr,[bot2,bot2],linestyle=2,color=50
+  xyouts,xr[0],bot2+0.1,'Cloud bottom',color=50,charsize=1.6
+  oplot,xr,[top2,top2],linestyle=2,color=250
+  xyouts,xr[0],top2+0.1,'Cloud top',color=250,charsize=1.6
+
+  plot, t3,z3,yr=yr,ytitle='Altitude (km ASL)',xtitle='Temperature (!Uo!NC)',xr=xr,title='C - 2013-01-10!CIce'
+  oplot,td3,z3,color=201
+  oplot,[0,0],yr,linestyle=1
+  oplot,xr,[bot3,bot3],linestyle=2,color=50
+  xyouts,xr[0],bot3+0.1,'Cloud bottom',color=50,charsize=1.6
+  oplot,xr,[top3,top3],linestyle=2,color=250
+  xyouts,xr[0],top3+0.1,'Cloud top',color=250,charsize=1.6 
+device, /close
+spawn, 'convert '+fp+'.ps '+fp+'.png'
+stop
+end

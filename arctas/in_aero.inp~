@@ -1,0 +1,2 @@
+.compile arctas_rtm_aero.pro
+arctas_rtm_aero, '20080709',/constant_ssa,/tau_approx
