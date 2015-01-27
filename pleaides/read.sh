@@ -1,0 +1,9 @@
+idl < /projects/leblanse/cloud/pro/cloudr_1 > /projects/leblanse/cloud/pro/outr_1
+idl < /projects/leblanse/cloud/pro/cloudr_2 > /projects/leblanse/cloud/pro/outr_2
+idl < /projects/leblanse/cloud/pro/cloudr_3 > /projects/leblanse/cloud/pro/outr_3
+idl < /projects/leblanse/cloud/pro/cloudr_4 > /projects/leblanse/cloud/pro/outr_4
+idl < /projects/leblanse/cloud/pro/cloudr_5 > /projects/leblanse/cloud/pro/outr_5
+idl < /projects/leblanse/cloud/pro/cloudr_6 > /projects/leblanse/cloud/pro/outr_6
+idl < /projects/leblanse/cloud/pro/cloudr_7 > /projects/leblanse/cloud/pro/outr_7
+idl < /projects/leblanse/cloud/pro/cloudr_8 > /projects/leblanse/cloud/pro/outr_8
+idl < /projects/leblanse/cloud/pro/cloudr_9 > /projects/leblanse/cloud/pro/outr_9
