@@ -28,6 +28,7 @@ The different folders denote the different research projects, which may or may n
       - Used for publication in LeBlanc, S. E., Pilewskie, P., Schmidt, K. S., and Coddington, O.: A generalized method for discriminating thermodynamic phase and retrieving cloud optical thickness and effective radius using transmitted shortwave radiance spectra, Atmos. Meas. Tech. Discuss., 7, 5293-5346, doi:10.5194/amtd-7-5293-2014, 2014.
   - <b>ssfr6</b> for special analysis for the SSFR6 instrument
   - <b>tcap</b> for initial TCAP cloud property analysis and comarison to MODIS
+  - <b>pleaides</b> for building multispectral retrieval LUT from libradtran radiative transfer calculations based on a computing cluster (pleaides or janus) the mie_hi.out file can be found at http://science.arm.gov/~sleblanc/mie_hi.out
 
 The codes contained herein are for science analysis. 
 The very nature of this research promotes evolving programs, thus legacy codes may still be prominent, with some lack in documentation. 
